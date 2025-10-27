@@ -12,7 +12,7 @@ export default defineConfig({
     }),
     basicSsl(),
   ],
-  base: process.env.NODE_ENV === 'production' ? '/vnge/' : '/',
+  base: '/vnge/',
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
