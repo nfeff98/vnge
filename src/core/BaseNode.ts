@@ -1,11 +1,11 @@
 export interface NodeInput {
   id: string;
-  data: HTMLCanvasElement | null;
+  data: HTMLCanvasElement | HTMLVideoElement | null;
 }
 
 export interface NodeOutput {
   id: string;
-  data: HTMLCanvasElement | null;
+  data: HTMLCanvasElement | HTMLVideoElement | null;
 }
 
 export enum NodeParameterType {
@@ -136,19 +136,19 @@ export abstract class BaseNode {
   
   abstract getNodeDefinition(): NodeDefinition;
 
-  setInput(inputId: string, data: HTMLCanvasElement | null) {
+  setInput(inputId: string, data: HTMLCanvasElement | HTMLVideoElement | null) {
     this.inputs.set(inputId, { id: inputId, data });
   }
 
-  getInput(inputId: string): HTMLCanvasElement | null {
+  getInput(inputId: string): HTMLCanvasElement | HTMLVideoElement | null {
     return this.inputs.get(inputId)?.data || null;
   }
 
-  setOutput(outputId: string, data: HTMLCanvasElement | null) {
+  setOutput(outputId: string, data: HTMLCanvasElement | HTMLVideoElement | null) {
     this.outputs.set(outputId, { id: outputId, data });
   }
 
-  getOutput(outputId: string): HTMLCanvasElement | null {
+  getOutput(outputId: string): HTMLCanvasElement | HTMLVideoElement | null {
     return this.outputs.get(outputId)?.data || null;
   }
 

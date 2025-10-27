@@ -19,7 +19,6 @@ import { PipelineEngine } from '../../core/PipelineEngine';
 import { CameraNode } from '../../nodes/CameraNode';
 import { HandTrackingNode } from '../../nodes/HandTrackingNode';
 import { OutputNode } from '../../nodes/OutputNode';
-import { useCamera } from '../../hooks/useCamera';
 
 import NodeComponent from './NodeComponent';
 import ContextMenu from './ContextMenu';
@@ -81,7 +80,6 @@ export default function NodeEditor() {
   } | null>(null);
   const [showMiniMap, setShowMiniMap] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { video, isInitialized, error } = useCamera();
 
   // Initialize pipeline with nodes
   useEffect(() => {
@@ -92,11 +90,6 @@ export default function NodeEditor() {
     const cameraNode = new CameraNode('camera-1');
     const handTrackingNode = new HandTrackingNode('hand-tracking-1');
     const outputNode = new OutputNode('output-1');
-
-    // Set video for camera node
-    if (video) {
-      cameraNode.setVideo(video);
-    }
 
     // Set target canvas for output node
     if (canvasRef.current) {
@@ -130,7 +123,7 @@ export default function NodeEditor() {
       })
     );
 
-  }, [video, pipeline]);
+  }, [pipeline]);
 
   // Update node connection counts when edges change
   useEffect(() => {
@@ -307,7 +300,6 @@ export default function NodeEditor() {
     switch (nodeType) {
       case 'camera':
         pipelineNode = new CameraNode(nodeId);
-        if (video) pipelineNode.setVideo(video);
         break;
       case 'handTracking':
         pipelineNode = new HandTrackingNode(nodeId);
@@ -335,7 +327,7 @@ export default function NodeEditor() {
     };
 
     setNodes(prev => [...prev, newNode]);
-  }, [pipeline, video]);
+  }, [pipeline]);
 
   const deleteNode = useCallback((nodeId: string) => {
     // Check if this is an output node
@@ -391,13 +383,11 @@ export default function NodeEditor() {
     return node ? node.visualConfig.name === 'Output' : false;
   }, [pipeline]);
 
-  // Auto-execute pipeline when video is ready
+  // Auto-execute pipeline
   useEffect(() => {
-    if (isInitialized && video) {
-      const interval = setInterval(executePipeline, 1000 / 15); // 15 FPS to give MediaPipe time to process
-      return () => clearInterval(interval);
-    }
-  }, [isInitialized, video, executePipeline]);
+    const interval = setInterval(executePipeline, 1000 / 15); // 15 FPS to give MediaPipe time to process
+    return () => clearInterval(interval);
+  }, [executePipeline]);
 
   // Toggle mini map when 'm' key is pressed
   useEffect(() => {
@@ -508,10 +498,9 @@ export default function NodeEditor() {
         borderRadius: '8px',
         zIndex: 1000,
       }}>
-        <div>Camera: {isInitialized ? 'Ready' : 'Loading...'}</div>
+        <div>Camera: Ready</div>
         <div>Pipeline: {isExecuting ? 'Running' : 'Stopped'}</div>
         <div>Output: {hasOutputNode() ? '✅ Connected' : '❌ Missing'}</div>
-        {error && <div style={{ color: '#ff6b6b' }}>Camera Error: {error}</div>}
         {pipelineError && <div style={{ color: '#ff6b6b' }}>Pipeline: {pipelineError}</div>}
       </div>
 

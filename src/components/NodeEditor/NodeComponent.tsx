@@ -73,7 +73,7 @@ export default function NodeComponent({ data }: NodeComponentProps) {
   const { visualConfig } = node;
   const nodeDefinition = node.getNodeDefinition();
 
-  const hideDisableToggle = nodeDefinition.type === 'output' || nodeDefinition.type === 'camera';
+  const hideDisableToggle = nodeDefinition.type === 'output';
 
   const showIOLimits = false;
   return (
@@ -127,11 +127,12 @@ export default function NodeComponent({ data }: NodeComponentProps) {
         />
       ))}
 
+<div className="absolute top-3 right-3 flex gap-2">
       {/* Settings button */}
       {Object.keys(nodeDefinition.parameters).length > 0 && (
         <button 
           onClick={handleToggleSettings} 
-          className="text-gray-500 hover:text-gray-300 absolute top-3 right-3 focus:outline-none focus:ring-0 transition-colors p-0"
+          className="text-gray-500 hover:text-gray-300 focus:outline-none focus:ring-0 transition-colors p-0"
         >
           <Settings size={16} />
         </button>
@@ -145,7 +146,7 @@ export default function NodeComponent({ data }: NodeComponentProps) {
           setIsEnabled(newEnabled);
           node?.setEnabled(newEnabled);
         }}
-        className={`absolute top-3 right-8 transition-colors p-0 focus:outline-none focus:ring-0 ${
+        className={`transition-colors p-0 focus:outline-none focus:ring-0 ${
           isEnabled 
             ? 'text-green-500 hover:text-green-400' 
             : 'text-red-500 hover:text-red-400'
@@ -155,6 +156,7 @@ export default function NodeComponent({ data }: NodeComponentProps) {
         <Power size={16} />
       </button>
       )}
+      </div>
       {settingsOpen && (
 
             <div className="space-y-3">

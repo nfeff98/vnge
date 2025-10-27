@@ -7,6 +7,7 @@ export class HandTrackingNode extends BaseNode {
   private hands: Hands | null = null;
   private outputCanvas: HTMLCanvasElement | null = null;
   private isInitialized: boolean = false;
+  private isProcessing: boolean = false;
 
   constructor(id: string) {
     super(id, {
@@ -53,6 +54,21 @@ export class HandTrackingNode extends BaseNode {
     }
   }
 
+  private isValidInput(inputElement: HTMLCanvasElement | HTMLVideoElement | null): boolean {
+    if (!inputElement) return false;
+    
+    if (inputElement instanceof HTMLVideoElement) {
+      // Check if video element has valid dimensions and is not ended
+      return inputElement.videoWidth > 0 && 
+             inputElement.videoHeight > 0 && 
+             !inputElement.ended &&
+             inputElement.readyState >= HTMLMediaElement.HAVE_METADATA;
+    } else {
+      // For canvas elements, just check dimensions
+      return inputElement.width > 0 && inputElement.height > 0;
+    }
+  }
+
   getNodeDefinition() {
     return {
       type: 'handTracking',
@@ -79,6 +95,10 @@ export class HandTrackingNode extends BaseNode {
           min: 0.1,
           max: 1.0,
           step: 0.1
+        },
+        transparentBackground: {
+          type: NodeParameterType.BOOLEAN,
+          value: true,
         }
       },
       maxInputs: 1,
@@ -91,9 +111,12 @@ export class HandTrackingNode extends BaseNode {
       await this.initialize();
     }
 
-    const inputCanvas = this.getInput('video');
-    if (!inputCanvas || !this.hands) {
-      // No input available, clear output
+    const inputElement = this.getInput('video');
+    
+    // Validate input and stop processing if invalid
+    if (!this.isValidInput(inputElement) || !this.hands) {
+      this.isProcessing = false;
+      // Clear output when input becomes invalid
       if (this.outputCanvas) {
         const ctx = this.outputCanvas.getContext('2d');
         if (ctx) {
@@ -104,17 +127,52 @@ export class HandTrackingNode extends BaseNode {
       return;
     }
 
+    // Handle both HTMLVideoElement and HTMLCanvasElement inputs
+    let inputWidth: number, inputHeight: number;
+    if (inputElement instanceof HTMLVideoElement) {
+      inputWidth = inputElement.videoWidth;
+      inputHeight = inputElement.videoHeight;
+    } else if (inputElement instanceof HTMLCanvasElement) {
+      inputWidth = inputElement.width;
+      inputHeight = inputElement.height;
+    } else {
+      // This shouldn't happen due to validation above, but TypeScript needs it
+      return;
+    }
+
     if (!this.outputCanvas) {
-      this.outputCanvas = this.createCanvas(inputCanvas.width, inputCanvas.height);
+      this.outputCanvas = this.createCanvas(inputWidth, inputHeight);
     }
 
     // Clear the output canvas
     const ctx = this.outputCanvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, this.outputCanvas.width, this.outputCanvas.height);
+    // Handle transparent background parameter
+    const transparentBackground = this.getParameter('transparentBackground') || false;
+    
+    if (transparentBackground && inputElement) {
+      // Draw the input image as background
+      ctx.drawImage(inputElement, 0, 0, this.outputCanvas.width, this.outputCanvas.height);
+    } else {
+      // Clear to black background
+      ctx.clearRect(0, 0, this.outputCanvas.width, this.outputCanvas.height);
+    }
+
+    // Prevent concurrent processing
+    if (this.isProcessing) {
+      return;
+    }
 
     try {
+      this.isProcessing = true;
+      
+      // Double-check input is still valid before processing
+      if (!this.isValidInput(inputElement)) {
+        this.isProcessing = false;
+        return;
+      }
+
       // Create a promise that resolves when we get results or times out
       const resultsPromise = new Promise<Results>((resolve, reject) => {
         let resolved = false;
@@ -145,7 +203,7 @@ export class HandTrackingNode extends BaseNode {
       });
 
       // Send the image to MediaPipe
-      await this.hands.send({ image: inputCanvas });
+      await this.hands.send({ image: inputElement! });
       
       // Wait for results
       const results = await resultsPromise;
@@ -155,6 +213,10 @@ export class HandTrackingNode extends BaseNode {
 
     } catch (error) {
       console.error('Hand tracking error:', error);
+      // Reset processing flag on error
+      this.isProcessing = false;
+    } finally {
+      this.isProcessing = false;
     }
 
     // Output is set by BaseNode.execute() - either pass-through or processed result
@@ -205,6 +267,7 @@ export class HandTrackingNode extends BaseNode {
   }
 
   cleanup() {
+    this.isProcessing = false;
     if (this.hands) {
       this.hands.close();
       this.hands = null;
