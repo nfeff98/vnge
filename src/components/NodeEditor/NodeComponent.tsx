@@ -1,7 +1,7 @@
 import { Handle, Position } from '@xyflow/react';
 import { BaseNode } from '../../core/BaseNode';
 import { useState, useEffect, useRef } from 'react';
-import { Settings, Loader2, Power } from 'lucide-react';
+import { Settings, Loader2, Power, ChevronUp, ChevronDown } from 'lucide-react';
 
 
 interface NodeComponentProps {
@@ -166,16 +166,41 @@ export default function NodeComponent({ data }: NodeComponentProps) {
                     {key}
                   </label>
                   {parameter.type === 'number' ? (
-                    <input 
-                      type="number"
-                      id={key}
-                      value={parameterValues[key] ?? parameter.value}
-                      onChange={(e) => handleParameterChange(key, parseFloat(e.target.value))}
-                      className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      step={parameter.step || 0.1}
-                      min={parameter.min}
-                      max={parameter.max}
-                    />
+                    <div className="flex gap-1 max-w-full">
+                      <input 
+                        type="text"
+                        id={key}
+                        value={parameterValues[key] ?? parameter.value}
+                        onChange={(e) => handleParameterChange(key, parseFloat(e.target.value) || 0)}
+                        className="w-[calc(100%-1rem)] px-2 py-1 h-7 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <div className="flex flex-col">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentValue = parameterValues[key] ?? parameter.value;
+                            const step = parameter.step || 0.1;
+                            const newValue = Math.min((parameter.max ?? Infinity), currentValue + step);
+                            handleParameterChange(key, parseFloat(newValue.toFixed(10)));
+                          }}
+                          className="px-1 py-0 border border-gray-300 rounded-b text-xs hover:border-[#666] focus:outline-none"
+                        >
+                          <ChevronUp size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentValue = parameterValues[key] ?? parameter.value;
+                            const step = parameter.step || 0.1;
+                            const newValue = Math.max((parameter.min ?? -Infinity), currentValue - step);
+                            handleParameterChange(key, parseFloat(newValue.toFixed(10)));
+                          }}
+                          className="px-1 py-0 border border-gray-300 rounded-t text-xs hover:border-[#666] focus:outline-none"
+                        >
+                          <ChevronDown size={12} />
+                        </button>
+                      </div>
+                    </div>
                   ) : parameter.type === 'boolean' ? (
                     <input 
                       type="checkbox"

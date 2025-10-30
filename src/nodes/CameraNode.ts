@@ -9,6 +9,7 @@ export class CameraNode extends BaseNode {
   constructor(id: string) {
     super(id, {
       name: 'Camera',
+      isInput: true,
       icon: Video,
       color: '#4CAF50',
       backgroundColor: '#1a1a1a',

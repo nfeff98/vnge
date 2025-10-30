@@ -12,6 +12,7 @@ export class HandTrackingNode extends BaseNode {
   constructor(id: string) {
     super(id, {
       name: 'Hand Tracking',
+      isInput: false,
       icon: Hand,
       color: '#FF9800',
       backgroundColor: '#1a1a1a',

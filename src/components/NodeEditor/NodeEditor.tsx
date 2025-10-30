@@ -19,10 +19,15 @@ import { PipelineEngine } from '../../core/PipelineEngine';
 import { CameraNode } from '../../nodes/CameraNode';
 import { HandTrackingNode } from '../../nodes/HandTrackingNode';
 import { OutputNode } from '../../nodes/OutputNode';
-
+import { ColorNode } from '../../nodes/ColorNode';
+import { PerlinNoiseNode } from '../../nodes/PerlinNoiseNode';
+import { CompositeNode } from '../../nodes/CompositeNode';
+import { OpacityNode } from '../../nodes/OpacityNode';
 import NodeComponent from './NodeComponent';
+
 import ContextMenu from './ContextMenu';
 import { MirrorNode } from '../../nodes/MirrorNode';
+import { TileAndOffsetNode } from '../../nodes/TileAndOffsetNode';
 
 const nodeTypes: NodeTypes = {
   default: NodeComponent,
@@ -157,10 +162,10 @@ export default function NodeEditor() {
     // Check if we have a valid path from camera to output
     const allNodes = pipeline.getAllNodes();
     const hasValidPath = () => {
-      const cameraNodes = allNodes.filter(node => node.visualConfig.name === 'Camera');
+      const inputNodes = allNodes.filter(node => node.visualConfig.isInput);
       const outputNodes = allNodes.filter(node => node.visualConfig.name === 'Output');
       
-      if (cameraNodes.length === 0 || outputNodes.length === 0) {
+      if (inputNodes.length === 0 || outputNodes.length === 0) {
         return false;
       }
 
@@ -179,11 +184,11 @@ export default function NodeEditor() {
         return outgoingEdges.some(edge => canReachOutput(edge.target, new Set(visited)));
       };
 
-      return cameraNodes.some(cameraNode => canReachOutput(cameraNode.id));
+      return inputNodes.some(inputNode => canReachOutput(inputNode.id));
     };
 
     if (!hasValidPath()) {
-      setPipelineError('No valid path from camera to output. Connect the camera to the output node.');
+      setPipelineError('No valid path from input to output. Connect an input to the output node.');
       return;
     }
 
@@ -310,6 +315,21 @@ export default function NodeEditor() {
         break;
       case 'mirror':
         pipelineNode = new MirrorNode(nodeId);
+        break;
+      case 'tileAndOffset':
+        pipelineNode = new TileAndOffsetNode(nodeId);
+        break;
+      case 'color':
+        pipelineNode = new ColorNode(nodeId);
+        break;
+      case 'perlinNoise':
+        pipelineNode = new PerlinNoiseNode(nodeId);
+        break;
+      case 'composite':
+        pipelineNode = new CompositeNode(nodeId);
+        break;
+      case 'opacity':
+        pipelineNode = new OpacityNode(nodeId);
         break;
       default:
         return;

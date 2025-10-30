@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { CameraNode } from '../../nodes/CameraNode';
 import { HandTrackingNode } from '../../nodes/HandTrackingNode';
 import { OutputNode } from '../../nodes/OutputNode';
-import { Video, Hand, Monitor, Trash2, FlipHorizontal } from 'lucide-react';
+import { TileAndOffsetNode } from '../../nodes/TileAndOffsetNode';
+import { ColorNode } from '../../nodes/ColorNode';
+import { PerlinNoiseNode } from '../../nodes/PerlinNoiseNode';
+import { CompositeNode } from '../../nodes/CompositeNode';
+import { OpacityNode } from '../../nodes/OpacityNode';
+import { Video, Hand, Monitor, Trash2, FlipHorizontal, Grid3x3, Palette, Cloud, Layers, Droplet } from 'lucide-react';
 
 interface ContextMenuProps {
   x: number;
@@ -22,6 +27,11 @@ const nodeTypes = [
   { type: 'handTracking', name: 'Hand Tracking', icon: Hand },
   { type: 'output', name: 'Output', icon: Monitor },
   { type: 'mirror', name: 'Mirror', icon: FlipHorizontal },
+  { type: 'tileAndOffset', name: 'Tile & Offset', icon: Grid3x3 },
+  { type: 'color', name: 'Color', icon: Palette },
+  { type: 'perlinNoise', name: 'Perlin Noise', icon: Cloud },
+  { type: 'composite', name: 'Composite', icon: Layers },
+  { type: 'opacity', name: 'Opacity', icon: Droplet },
 ];
 
 export default function ContextMenu({

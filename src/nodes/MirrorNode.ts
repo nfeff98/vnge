@@ -10,6 +10,7 @@ export class MirrorNode extends BaseNode {
     constructor(id: string) {
         super(id, {
             name: 'Mirror',
+            isInput: false,
             icon: FlipHorizontal,
             color: '#FF9800',
             backgroundColor: '#1a1a1a',

@@ -43,6 +43,7 @@ import type { LucideIcon } from 'lucide-react';
 
 export interface NodeVisualConfig {
   name: string;
+  isInput: boolean;
   icon: LucideIcon;
   color: string;
   backgroundColor: string;

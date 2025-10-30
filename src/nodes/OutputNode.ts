@@ -7,6 +7,7 @@ export class OutputNode extends BaseNode {
   constructor(id: string) {
     super(id, {
       name: 'Output',
+      isInput: false,
       icon: Monitor,
       color: '#2196F3',
       backgroundColor: '#1a1a1a',
