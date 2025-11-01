@@ -1,11 +1,11 @@
 export interface NodeInput {
   id: string;
-  data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | null;
+  data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | Color | null;
 }
 
 export interface NodeOutput {
   id: string;
-  data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | null;
+  data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | Color | null;
 }
 
 export enum NodeParameterType {
@@ -40,6 +40,7 @@ export interface NodeDefinition {
 }
 
 import type { LucideIcon } from 'lucide-react';
+import type { Color } from '../nodes/ColorNode';
 
 export interface NodeVisualConfig {
   name: string;
@@ -137,19 +138,19 @@ export abstract class BaseNode {
   
   abstract getNodeDefinition(): NodeDefinition;
 
-  setInput(inputId: string, data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | null) {
+  setInput(inputId: string, data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | Color | null) {
     this.inputs.set(inputId, { id: inputId, data });
   }
 
-  getInput(inputId: string): HTMLCanvasElement | HTMLVideoElement | number | string | boolean | null {
+  getInput(inputId: string): HTMLCanvasElement | HTMLVideoElement | number | string | boolean | Color | null {
     return this.inputs.get(inputId)?.data || null;
   }
 
-  setOutput(outputId: string, data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | null) {
+  setOutput(outputId: string, data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | Color | null) {
     this.outputs.set(outputId, { id: outputId, data });
   }
 
-  getOutput(outputId: string): HTMLCanvasElement | HTMLVideoElement | number | string | boolean | null {
+  getOutput(outputId: string): HTMLCanvasElement | HTMLVideoElement | number | string | boolean | Color | null {
     return this.outputs.get(outputId)?.data || null;
   }
 

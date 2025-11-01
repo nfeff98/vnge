@@ -2,6 +2,7 @@ import { BaseNode, NodeParameterType } from '../core/BaseNode';
 import { Hands, HAND_CONNECTIONS, type Results } from '@mediapipe/hands';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 import { Hand } from 'lucide-react';
+import type { Color } from './ColorNode';
 
 export class HandTrackingNode extends BaseNode {
   private hands: Hands | null = null;
@@ -55,7 +56,7 @@ export class HandTrackingNode extends BaseNode {
     }
   }
 
-  private isValidInput(inputElement: HTMLCanvasElement | HTMLVideoElement | null | number | string | boolean): boolean {
+  private isValidInput(inputElement: HTMLCanvasElement | HTMLVideoElement | null | number | string | boolean | Color): boolean {
     if (!inputElement) return false;
     
     if (inputElement instanceof HTMLVideoElement) {
@@ -65,7 +66,7 @@ export class HandTrackingNode extends BaseNode {
              !inputElement.ended &&
              inputElement.readyState >= HTMLMediaElement.HAVE_METADATA;
     } else {
-      if (typeof(inputElement) !== 'object') return false;
+      if (!(inputElement instanceof HTMLCanvasElement || inputElement instanceof HTMLVideoElement)) return false;
       // For canvas elements, just check dimensions
       return inputElement.width > 0 && inputElement.height > 0;
     }
