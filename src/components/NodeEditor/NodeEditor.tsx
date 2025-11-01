@@ -23,6 +23,8 @@ import { ColorNode } from '../../nodes/ColorNode';
 import { PerlinNoiseNode } from '../../nodes/PerlinNoiseNode';
 import { CompositeNode } from '../../nodes/CompositeNode';
 import { OpacityNode } from '../../nodes/OpacityNode';
+import { TimeNode } from '../../nodes/TimeNode';
+import { MathNode } from '../../nodes/MathNode';
 import NodeComponent from './NodeComponent';
 
 import ContextMenu from './ContextMenu';
@@ -330,6 +332,12 @@ export default function NodeEditor() {
         break;
       case 'opacity':
         pipelineNode = new OpacityNode(nodeId);
+        break;
+      case 'time':
+        pipelineNode = new TimeNode(nodeId);
+        break;
+      case 'math':
+        pipelineNode = new MathNode(nodeId);
         break;
       default:
         return;

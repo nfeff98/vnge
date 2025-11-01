@@ -19,10 +19,23 @@ export default function NodeComponent({ data }: NodeComponentProps) {
   const [parameterValues, setParameterValues] = useState<Record<string, any>>({});
   const parameterValuesRef = useRef<Record<string, any>>({});
   const [isEnabled, setIsEnabled] = useState(true);
+  const [updateTrigger, setUpdateTrigger] = useState(0);
+  const animationFrameRef = useRef<number | null>(null);
+  const settingsOpenRef = useRef(settingsOpen);
+  const nodeRef = useRef(node);
 
   const handleToggleSettings = () => {
     setSettingsOpen(!settingsOpen);
   };
+
+  // Keep refs in sync
+  useEffect(() => {
+    settingsOpenRef.current = settingsOpen;
+  }, [settingsOpen]);
+
+  useEffect(() => {
+    nodeRef.current = node;
+  }, [node]);
 
   // Initialize parameters and enabled state when node changes
   useEffect(() => {
@@ -52,10 +65,43 @@ export default function NodeComponent({ data }: NodeComponentProps) {
     }
   }, [node]);
 
+  // Continuously update display values when settings are open
+  useEffect(() => {
+    const updateDisplayValues = () => {
+      if (settingsOpenRef.current && nodeRef.current) {
+        // Force re-render to update input values in display
+        setUpdateTrigger(prev => prev + 1);
+      }
+      // Keep looping regardless
+      animationFrameRef.current = requestAnimationFrame(updateDisplayValues);
+    };
+
+    // Start the loop
+    animationFrameRef.current = requestAnimationFrame(updateDisplayValues);
+
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, []); // Empty deps - only run once on mount
+
   const handleParameterChange = (key: string, value: any) => {
     setParameterValues(prev => ({ ...prev, [key]: value }));
     parameterValuesRef.current[key] = value;
     node?.setParameter(key, value);
+  };
+
+  // Helper to get display value - prioritize input over parameter
+  const getDisplayValue = (key: string, parameter: any) => {
+    // Reference updateTrigger to ensure re-render when it changes
+    void updateTrigger;
+    const inputValue = node?.getInput(key);
+    if (inputValue !== null && inputValue !== undefined) {
+      return inputValue;
+    }
+    return parameterValues[key] ?? parameter.value;
   };
 
   // Handle null node (loading state)
@@ -76,6 +122,15 @@ export default function NodeComponent({ data }: NodeComponentProps) {
   const hideDisableToggle = nodeDefinition.type === 'output';
 
   const showIOLimits = false;
+
+  // Categorize inputs based on whether they have matching parameters
+  const visibleParameterKeys = Object.keys(nodeDefinition.parameters);
+  const inputsWithMatchingParams = nodeDefinition.inputs.filter(inputId => 
+    visibleParameterKeys.includes(inputId)
+  );
+  const inputsWithoutMatchingParams = nodeDefinition.inputs.filter(inputId => 
+    !visibleParameterKeys.includes(inputId)
+  );
   return (
     <div 
       className="rounded-lg p-2.5 text-white border-2"
@@ -99,8 +154,8 @@ export default function NodeComponent({ data }: NodeComponentProps) {
         {(inputConnections >= nodeDefinition.maxInputs || outputConnections >= nodeDefinition.maxOutputs) && ' (FULL)'}
       </div>}
       
-      {/* Input handles */}
-      {nodeDefinition.inputs.map((inputId, index) => (
+      {/* Input handles - when settings CLOSED, stack all at same position */}
+      {!settingsOpen && nodeDefinition.inputs.map((inputId) => (
         <Handle
           key={`input-${inputId}`}
           type="target"
@@ -108,10 +163,13 @@ export default function NodeComponent({ data }: NodeComponentProps) {
           id={inputId}
           style={{ 
             background: visualConfig.color,
-            top: 30 + (index * 20)
+            top: 30
           }}
         />
       ))}
+      
+      {/* Input handles for params - rendered inline with parameter fields */}
+      {/* (These are handled within the parameter rendering loop below) */}
       
       {/* Output handles */}
       {nodeDefinition.outputs.map((outputId, index) => (
@@ -157,11 +215,48 @@ export default function NodeComponent({ data }: NodeComponentProps) {
       </button>
       )}
       </div>
+
+      {/* Labeled inputs (without matching parameters) - only when settings open */}
+      {settingsOpen && inputsWithoutMatchingParams.length > 0 && (
+        <div className="">
+          {inputsWithoutMatchingParams.map((inputId) => (
+            <div key={inputId} className="text-xs text-gray-400 relative text-left ">
+              <Handle
+                type="target"
+                position={Position.Left}
+                id={inputId}
+                style={{ 
+                  background: visualConfig.color,
+                  top: '50%',
+                  transform: 'translate(-15px, -50%)'
+                }}
+              />
+              {inputId}
+            </div>
+          ))}
+        </div>
+      )}
+
       {settingsOpen && (
 
-            <div className="space-y-3">
-              {Object.entries(nodeDefinition.parameters).map(([key, parameter]) => (
-                <div key={key} className="flex flex-col">
+            <div className="space-y-3 mt-1">
+              {Object.entries(nodeDefinition.parameters).map(([key, parameter]) => {
+                const hasMatchingInput = inputsWithMatchingParams.includes(key);
+                return (
+                <div key={key} className="flex flex-col relative">
+                  {/* Inline input handle for this parameter */}
+                  {hasMatchingInput && (
+                    <Handle
+                      type="target"
+                      position={Position.Left}
+                      id={key}
+                      style={{ 
+                        background: visualConfig.color,
+                        top: '50%',
+                        transform: 'translate(-16px, 8px)'
+                      }}
+                    />
+                  )}
                   <label htmlFor={key} className="text-sm text-left font-book text-gray-400 mb-1">
                     {key}
                   </label>
@@ -170,7 +265,7 @@ export default function NodeComponent({ data }: NodeComponentProps) {
                       <input 
                         type="text"
                         id={key}
-                        value={parameterValues[key] ?? parameter.value}
+                        value={getDisplayValue(key, parameter)}
                         onChange={(e) => handleParameterChange(key, parseFloat(e.target.value) || 0)}
                         className="w-[calc(100%-1rem)] px-2 py-1 h-7 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
@@ -178,7 +273,7 @@ export default function NodeComponent({ data }: NodeComponentProps) {
                         <button
                           type="button"
                           onClick={() => {
-                            const currentValue = parameterValues[key] ?? parameter.value;
+                            const currentValue = getDisplayValue(key, parameter);
                             const step = parameter.step || 0.1;
                             const newValue = Math.min((parameter.max ?? Infinity), currentValue + step);
                             handleParameterChange(key, parseFloat(newValue.toFixed(10)));
@@ -190,7 +285,7 @@ export default function NodeComponent({ data }: NodeComponentProps) {
                         <button
                           type="button"
                           onClick={() => {
-                            const currentValue = parameterValues[key] ?? parameter.value;
+                            const currentValue = getDisplayValue(key, parameter);
                             const step = parameter.step || 0.1;
                             const newValue = Math.max((parameter.min ?? -Infinity), currentValue - step);
                             handleParameterChange(key, parseFloat(newValue.toFixed(10)));
@@ -205,14 +300,14 @@ export default function NodeComponent({ data }: NodeComponentProps) {
                     <input 
                       type="checkbox"
                       id={key}
-                      checked={parameterValues[key] ?? parameter.value}
+                      checked={getDisplayValue(key, parameter)}
                       onChange={(e) => handleParameterChange(key, e.target.checked)}
                       className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
                   ) : parameter.type === 'enum' ? (
                     <select 
                       id={key}
-                      value={parameterValues[key] ?? parameter.value}
+                      value={getDisplayValue(key, parameter)}
                       onChange={(e) => handleParameterChange(key, e.target.value)}
                       className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
@@ -224,7 +319,7 @@ export default function NodeComponent({ data }: NodeComponentProps) {
                     <input 
                       type="text"
                       id={key}
-                      value={parameterValues[key] ?? parameter.value}
+                      value={getDisplayValue(key, parameter)}
                       onChange={(e) => handleParameterChange(key, JSON.parse(e.target.value))}
                       className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -232,13 +327,14 @@ export default function NodeComponent({ data }: NodeComponentProps) {
                     <input 
                       type="text"
                       id={key}
-                      value={parameterValues[key] ?? parameter.value}
+                      value={getDisplayValue(key, parameter)}
                       onChange={(e) => handleParameterChange(key, e.target.value)}
                       className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
       )}
     </div>

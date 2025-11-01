@@ -28,7 +28,9 @@ export class ColorNode extends BaseNode {
   getNodeDefinition() {
     return {
       type: 'color',
-      inputs: [],
+      inputs: this.inputMode === 'rgb' ? ['r', 'g', 'b', 'a'] 
+            : this.inputMode === 'hex' ? ['hex'] 
+            : ['h', 's', 'v'],
       outputs: ['color'],
       parameters: {
         inputMode: { type: NodeParameterType.ENUM, value: 'rgb', options: ['rgb', 'hex', 'hsv'] },
@@ -45,7 +47,7 @@ export class ColorNode extends BaseNode {
           v: { type: NodeParameterType.NUMBER, value: 100, min: 0, max: 100, step: 1 }
         })
       },
-      maxInputs: 0,
+      maxInputs: 4,
       maxOutputs: 10
     };
   }
@@ -59,10 +61,10 @@ export class ColorNode extends BaseNode {
       // Sync color values between RGB, Hex, and HSV
       if (key === 'r' || key === 'g' || key === 'b' || key === 'a') {
         this.color = {
-          r: this.getParameter('r') as number,
-          g: this.getParameter('g') as number,
-          b: this.getParameter('b') as number,
-          a: this.getParameter('a') as number
+          r: this.getInput('r') as number ?? this.getParameter('r') as number,
+          g: this.getInput('g') as number ?? this.getParameter('g') as number,
+          b: this.getInput('b') as number ?? this.getParameter('b') as number,
+          a: this.getInput('a') as number ?? this.getParameter('a') as number
         };
         // Update hex
         this.setParameter('hex', this.rgbToHex(this.color.r, this.color.g, this.color.b));
@@ -103,13 +105,27 @@ export class ColorNode extends BaseNode {
   }
 
   async executeInternal(): Promise<void> {
-    // Ensure color is up to date with current parameters
-    this.color = {
-      r: (this.getParameter('r') as number) ?? this.color.r ?? 255,
-      g: (this.getParameter('g') as number) ?? this.color.g ?? 0,
-      b: (this.getParameter('b') as number) ?? this.color.b ?? 0,
-      a: (this.getParameter('a') as number) ?? this.color.a ?? 1
-    };
+    // Get values from inputs or fallback to parameters
+    if (this.inputMode === 'rgb') {
+      this.color = {
+        r: (this.getInput('r') as number) ?? (this.getParameter('r') as number) ?? 255,
+        g: (this.getInput('g') as number) ?? (this.getParameter('g') as number) ?? 0,
+        b: (this.getInput('b') as number) ?? (this.getParameter('b') as number) ?? 0,
+        a: (this.getInput('a') as number) ?? (this.getParameter('a') as number) ?? 1
+      };
+    } else if (this.inputMode === 'hex') {
+      const hexValue = (this.getInput('hex') as string) ?? (this.getParameter('hex') as string) ?? '#FF0000';
+      const rgb = this.hexToRgb(hexValue);
+      if (rgb) {
+        this.color = { ...rgb, a: this.color.a };
+      }
+    } else if (this.inputMode === 'hsv') {
+      const h = (this.getInput('h') as number) ?? (this.getParameter('h') as number) ?? 0;
+      const s = (this.getInput('s') as number) ?? (this.getParameter('s') as number) ?? 100;
+      const v = (this.getInput('v') as number) ?? (this.getParameter('v') as number) ?? 100;
+      const rgb = this.hsvToRgb(h, s, v);
+      this.color = { ...rgb, a: this.color.a };
+    }
     
     this.setOutput('color', this.color as any);
   }

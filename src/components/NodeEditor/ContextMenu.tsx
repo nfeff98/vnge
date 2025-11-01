@@ -7,7 +7,9 @@ import { ColorNode } from '../../nodes/ColorNode';
 import { PerlinNoiseNode } from '../../nodes/PerlinNoiseNode';
 import { CompositeNode } from '../../nodes/CompositeNode';
 import { OpacityNode } from '../../nodes/OpacityNode';
-import { Video, Hand, Monitor, Trash2, FlipHorizontal, Grid3x3, Palette, Cloud, Layers, Droplet } from 'lucide-react';
+import { MathNode } from '../../nodes/MathNode';
+import { TimeNode } from '../../nodes/TimeNode';
+import { Video, Hand, Monitor, Trash2, FlipHorizontal, Grid3x3, Palette, Cloud, Layers, Droplet, Clock, Calculator } from 'lucide-react';
 
 interface ContextMenuProps {
   x: number;
@@ -32,6 +34,8 @@ const nodeTypes = [
   { type: 'perlinNoise', name: 'Perlin Noise', icon: Cloud },
   { type: 'composite', name: 'Composite', icon: Layers },
   { type: 'opacity', name: 'Opacity', icon: Droplet },
+  { type: 'time', name: 'Time', icon: Clock },
+  { type: 'math', name: 'Math', icon: Calculator },
 ];
 
 export default function ContextMenu({

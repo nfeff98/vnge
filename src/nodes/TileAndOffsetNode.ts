@@ -20,7 +20,7 @@ export class TileAndOffsetNode extends BaseNode {
   getNodeDefinition() {
     return {
       type: 'tileAndOffset',
-      inputs: ['image'],
+      inputs: ['image', 'tileX', 'tileY', 'offsetX', 'offsetY'],
       outputs: ['image'],
       parameters: {
         tileX: { type: NodeParameterType.NUMBER, value: 1, min: 0.1, max: 10, step: 0.1 },
@@ -28,7 +28,7 @@ export class TileAndOffsetNode extends BaseNode {
         offsetX: { type: NodeParameterType.NUMBER, value: 0, min: -5, max: 5, step: 0.1 },
         offsetY: { type: NodeParameterType.NUMBER, value: 0, min: -5, max: 5, step: 0.1 }
       },
-      maxInputs: 1,
+      maxInputs: 5,
       maxOutputs: 1
     };
   }
@@ -67,10 +67,10 @@ export class TileAndOffsetNode extends BaseNode {
       }
     }
 
-    const tileX = this.getParameter('tileX') as number;
-    const tileY = this.getParameter('tileY') as number;
-    const offsetX = this.getParameter('offsetX') as number;
-    const offsetY = this.getParameter('offsetY') as number;
+    const tileX = this.getInput('tileX') as number || this.getParameter('tileX') as number;
+    const tileY = this.getInput('tileY') as number || this.getParameter('tileY') as number;
+    const offsetX = this.getInput('offsetX') as number || this.getParameter('offsetX') as number;
+    const offsetY = this.getInput('offsetY') as number || this.getParameter('offsetY') as number;
 
     this.outputCanvas ||= this.createCanvas(sourceCanvas.width, sourceCanvas.height);
     

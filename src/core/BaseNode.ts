@@ -1,11 +1,11 @@
 export interface NodeInput {
   id: string;
-  data: HTMLCanvasElement | HTMLVideoElement | null;
+  data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | null;
 }
 
 export interface NodeOutput {
   id: string;
-  data: HTMLCanvasElement | HTMLVideoElement | null;
+  data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | null;
 }
 
 export enum NodeParameterType {
@@ -137,19 +137,19 @@ export abstract class BaseNode {
   
   abstract getNodeDefinition(): NodeDefinition;
 
-  setInput(inputId: string, data: HTMLCanvasElement | HTMLVideoElement | null) {
+  setInput(inputId: string, data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | null) {
     this.inputs.set(inputId, { id: inputId, data });
   }
 
-  getInput(inputId: string): HTMLCanvasElement | HTMLVideoElement | null {
+  getInput(inputId: string): HTMLCanvasElement | HTMLVideoElement | number | string | boolean | null {
     return this.inputs.get(inputId)?.data || null;
   }
 
-  setOutput(outputId: string, data: HTMLCanvasElement | HTMLVideoElement | null) {
+  setOutput(outputId: string, data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | null) {
     this.outputs.set(outputId, { id: outputId, data });
   }
 
-  getOutput(outputId: string): HTMLCanvasElement | HTMLVideoElement | null {
+  getOutput(outputId: string): HTMLCanvasElement | HTMLVideoElement | number | string | boolean | null {
     return this.outputs.get(outputId)?.data || null;
   }
 

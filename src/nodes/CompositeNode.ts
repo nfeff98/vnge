@@ -1,6 +1,7 @@
 import { BaseNode } from '../core/BaseNode';
 import { Layers } from 'lucide-react';
 import { NodeParameterType } from '../core/BaseNode';
+import type { Color } from './ColorNode';
 
 export class CompositeNode extends BaseNode {
   private outputCanvas: HTMLCanvasElement | null = null;
@@ -62,9 +63,37 @@ export class CompositeNode extends BaseNode {
       return;
     }
 
-    // Convert video to canvas if needed
-    const baseCanvas = await this.ensureCanvas(base);
-    const layerCanvas = await this.ensureCanvas(layer);
+    if (typeof(base) !== 'object' || typeof(layer) !== 'object') {
+      return;
+    }
+
+    // Determine dimensions - prioritize canvas/video dimensions, fallback to default
+    let targetWidth = 640;
+    let targetHeight = 480;
+    
+    if (base && !(base as any).r) {
+      const baseEl = base as HTMLCanvasElement | HTMLVideoElement;
+      if (baseEl instanceof HTMLVideoElement) {
+        targetWidth = baseEl.videoWidth || 640;
+        targetHeight = baseEl.videoHeight || 480;
+      } else {
+        targetWidth = baseEl.width || 640;
+        targetHeight = baseEl.height || 480;
+      }
+    } else if (layer && !(layer as any).r) {
+      const layerEl = layer as HTMLCanvasElement | HTMLVideoElement;
+      if (layerEl instanceof HTMLVideoElement) {
+        targetWidth = layerEl.videoWidth || 640;
+        targetHeight = layerEl.videoHeight || 480;
+      } else {
+        targetWidth = layerEl.width || 640;
+        targetHeight = layerEl.height || 480;
+      }
+    }
+
+    // Convert inputs to canvas
+    const baseCanvas = await this.ensureCanvas(base, targetWidth, targetHeight);
+    const layerCanvas = await this.ensureCanvas(layer, targetWidth, targetHeight);
 
     if (!baseCanvas || !layerCanvas) return;
 
@@ -92,8 +121,25 @@ export class CompositeNode extends BaseNode {
     this.setOutput('composite', this.outputCanvas);
   }
 
-  private async ensureCanvas(input: HTMLCanvasElement | HTMLVideoElement | null): Promise<HTMLCanvasElement | null> {
+  private async ensureCanvas(
+    input: HTMLCanvasElement | HTMLVideoElement | Color | null,
+    width: number = 640,
+    height: number = 480
+  ): Promise<HTMLCanvasElement | null> {
     if (!input) return null;
+
+    // Check if input is a Color object
+    if ((input as any).r !== undefined && (input as any).g !== undefined && (input as any).b !== undefined) {
+      const color = input as Color;
+      const canvas = this.createCanvas(width, height);
+      const ctx = canvas.getContext('2d')!;
+      
+      // Fill canvas with solid color
+      ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a ?? 1})`;
+      ctx.fillRect(0, 0, width, height);
+      
+      return canvas;
+    }
 
     if (input instanceof HTMLVideoElement) {
       const video = input as HTMLVideoElement;

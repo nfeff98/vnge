@@ -55,7 +55,7 @@ export class HandTrackingNode extends BaseNode {
     }
   }
 
-  private isValidInput(inputElement: HTMLCanvasElement | HTMLVideoElement | null): boolean {
+  private isValidInput(inputElement: HTMLCanvasElement | HTMLVideoElement | null | number | string | boolean): boolean {
     if (!inputElement) return false;
     
     if (inputElement instanceof HTMLVideoElement) {
@@ -65,6 +65,7 @@ export class HandTrackingNode extends BaseNode {
              !inputElement.ended &&
              inputElement.readyState >= HTMLMediaElement.HAVE_METADATA;
     } else {
+      if (typeof(inputElement) !== 'object') return false;
       // For canvas elements, just check dimensions
       return inputElement.width > 0 && inputElement.height > 0;
     }
