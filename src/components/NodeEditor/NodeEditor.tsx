@@ -30,6 +30,7 @@ import NodeComponent from './NodeComponent';
 import ContextMenu from './ContextMenu';
 import { MirrorNode } from '../../nodes/MirrorNode';
 import { TileAndOffsetNode } from '../../nodes/TileAndOffsetNode';
+import UIMenu from './UIMenu';
 
 const nodeTypes: NodeTypes = {
   default: NodeComponent,
@@ -516,21 +517,7 @@ export default function NodeEditor() {
       </div>
       
       {/* Status */}
-      <div style={{
-        position: 'fixed',
-        top: 20,
-        left: 20,
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        color: 'white',
-        padding: '10px',
-        borderRadius: '8px',
-        zIndex: 1000,
-      }}>
-        <div>Camera: Ready</div>
-        <div>Pipeline: {isExecuting ? 'Running' : 'Stopped'}</div>
-        <div>Output: {hasOutputNode() ? '✅ Connected' : '❌ Missing'}</div>
-        {pipelineError && <div style={{ color: '#ff6b6b' }}>Pipeline: {pipelineError}</div>}
-      </div>
+      <UIMenu />
 
       {/* Context Menu */}
       {contextMenu && (

@@ -51,11 +51,34 @@ button {
   transition: border-color 0.25s;
 }
 button:hover {
-  border-color: #646cff;
+  border-color: black;
 }
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
+}
+
+.menu-button {
+  width: auto;
+  height: 40px;
+  text-align: center;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 16px;
+  padding-right: 16px;
+  cursor: pointer;
+  background-color: transparent;
+  transition: all 0.2s ease-in-out;
+  &:hover {
+    background-color: black;
+    color: white;
+  }
+  &:disabled {
+    background-color: #f0f0f0;
+    border-color: transparent;
+    color: #888;
+    cursor: not-allowed;
+  }
 }
 
 @media (prefers-color-scheme: light) {
