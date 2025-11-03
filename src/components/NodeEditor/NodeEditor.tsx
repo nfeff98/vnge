@@ -31,6 +31,8 @@ import ContextMenu from './ContextMenu';
 import { MirrorNode } from '../../nodes/MirrorNode';
 import { TileAndOffsetNode } from '../../nodes/TileAndOffsetNode';
 import UIMenu from './UIMenu';
+import { useProjectManager } from '../../hooks/useProjectManager';
+import type { BaseNode } from '../../core/BaseNode';
 
 const nodeTypes: NodeTypes = {
   default: NodeComponent,
@@ -38,41 +40,14 @@ const nodeTypes: NodeTypes = {
 
 const initialNodes: Node[] = [
   {
-    id: 'camera-1',
-    type: 'default',
-    position: { x: 100, y: 100 },
-    data: { node: null }, // Will be set when nodes are created
-  },
-  {
-    id: 'hand-tracking-1',
-    type: 'default',
-    position: { x: 400, y: 100 },
-    data: { node: null }, // Will be set when nodes are created
-  },
-  {
     id: 'output-1',
     type: 'default',
-    position: { x: 700, y: 100 },
+    position: { x: 400, y: 300 },
     data: { node: null }, // Will be set when nodes are created
   },
 ];
 
-const initialEdges: Edge[] = [
-  {
-    id: 'camera-to-hand',
-    source: 'camera-1',
-    target: 'hand-tracking-1',
-    sourceHandle: 'video',
-    targetHandle: 'video',
-  },
-  {
-    id: 'hand-to-output',
-    source: 'hand-tracking-1',
-    target: 'output-1',
-    sourceHandle: 'result',
-    targetHandle: 'image',
-  },
-];
+const initialEdges: Edge[] = [];
 
 export default function NodeEditor() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -89,14 +64,74 @@ export default function NodeEditor() {
   const [showMiniMap, setShowMiniMap] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Handle project loaded from file
+  const handleProjectLoaded = useCallback((newNodes: Node[], newEdges: Edge[], pipelineNodes: BaseNode[]) => {
+    // Clear existing pipeline
+    pipeline.clear();
+
+    // If loading an empty project (new project), create a default output node
+    if (pipelineNodes.length === 0) {
+      const outputNode = new OutputNode('output-1');
+      if (canvasRef.current) {
+        outputNode.setTargetCanvas(canvasRef.current);
+      }
+      pipeline.addNode(outputNode);
+
+      const outputReactNode: Node = {
+        id: 'output-1',
+        type: 'default',
+        position: { x: 400, y: 300 },
+        data: { node: outputNode },
+      };
+
+      setNodes([outputReactNode]);
+      setEdges([]);
+      return;
+    }
+
+    // Add nodes to pipeline
+    pipelineNodes.forEach(node => {
+      pipeline.addNode(node);
+    });
+
+    // Recreate connections
+    newEdges.forEach(edge => {
+      pipeline.connect(
+        edge.source,
+        edge.sourceHandle || 'default',
+        edge.target,
+        edge.targetHandle || 'default'
+      );
+    });
+
+    // Update React Flow state
+    setNodes(newNodes);
+    setEdges(newEdges);
+  }, [pipeline, setNodes, setEdges, canvasRef]);
+
+  // Project manager hook
+  const projectManager = useProjectManager({
+    pipeline,
+    nodes,
+    edges,
+    canvasRef,
+    onProjectLoaded: handleProjectLoaded,
+  });
+
+  // Mark project as dirty when nodes or edges change
+  useEffect(() => {
+    // Don't mark dirty on initial load
+    if (nodes.length > 0 || edges.length > 0) {
+      projectManager.markDirty();
+    }
+  }, [nodes, edges]);
+
   // Initialize pipeline with nodes
   useEffect(() => {
     // Clear existing nodes
     pipeline.clear();
 
-    // Create node instances
-    const cameraNode = new CameraNode('camera-1');
-    const handTrackingNode = new HandTrackingNode('hand-tracking-1');
+    // Create only an output node
     const outputNode = new OutputNode('output-1');
 
     // Set target canvas for output node
@@ -104,14 +139,8 @@ export default function NodeEditor() {
       outputNode.setTargetCanvas(canvasRef.current);
     }
 
-    // Add nodes to pipeline
-    pipeline.addNode(cameraNode);
-    pipeline.addNode(handTrackingNode);
+    // Add node to pipeline
     pipeline.addNode(outputNode);
-
-    // Connect nodes
-    pipeline.connect('camera-1', 'video', 'hand-tracking-1', 'video');
-    pipeline.connect('hand-tracking-1', 'result', 'output-1', 'image');
 
     // Update React Flow nodes with actual node instances and connection counts
     setNodes(prevNodes => 
@@ -427,7 +456,61 @@ export default function NodeEditor() {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [showMiniMap]);    
+  }, [showMiniMap]);
+
+  // Keyboard shortcuts for file operations
+  useEffect(() => {
+    const handleKeyDown = async (event: KeyboardEvent) => {
+      // Check for Ctrl/Cmd key
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const modifierKey = isMac ? event.metaKey : event.ctrlKey;
+
+      if (modifierKey) {
+        // Ctrl+S or Cmd+S - Save
+        if (event.key === 's' && !event.shiftKey) {
+          event.preventDefault();
+          if (projectManager.needsSave()) {
+            await projectManager.saveAs();
+          } else {
+            await projectManager.save();
+          }
+        }
+        // Ctrl+Shift+S or Cmd+Shift+S - Save As
+        else if (event.key === 's' && event.shiftKey) {
+          event.preventDefault();
+          await projectManager.saveAs();
+        }
+        // Ctrl+O or Cmd+O - Open
+        else if (event.key === 'o') {
+          event.preventDefault();
+          await projectManager.open();
+        }
+        // Ctrl+N or Cmd+N - New
+        else if (event.key === 'n') {
+          event.preventDefault();
+          projectManager.newProject();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [projectManager]);
+
+  // Warn user before closing window with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (projectManager.projectState.isDirty) {
+        event.preventDefault();
+        // Modern browsers require returnValue to be set
+        event.returnValue = '';
+        return '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [projectManager.projectState.isDirty]);    
 
   const windowWidth = window.innerWidth;
   const windowHeight = window.innerHeight;
@@ -517,7 +600,20 @@ export default function NodeEditor() {
       </div>
       
       {/* Status */}
-      <UIMenu />
+      <UIMenu 
+        onNew={projectManager.newProject}
+        onOpen={projectManager.open}
+        onSave={async () => {
+          if (projectManager.needsSave()) {
+            await projectManager.saveAs();
+          } else {
+            await projectManager.save();
+          }
+        }}
+        onSaveAs={projectManager.saveAs}
+        fileName={projectManager.projectState.fileName}
+        isDirty={projectManager.projectState.isDirty}
+      />
 
       {/* Context Menu */}
       {contextMenu && (

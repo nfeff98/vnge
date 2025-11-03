@@ -169,6 +169,11 @@ export abstract class BaseNode {
       ctx.drawImage(source, 0, 0);
     }
   }
+
+  // Override in subclasses to cleanup resources (camera, MediaPipe, etc.)
+  cleanup() {
+    // Default: do nothing - subclasses should override if needed
+  }
 }
 
 /**

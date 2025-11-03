@@ -10,6 +10,15 @@ interface MenuElement {
     disabled?: boolean;
 }
 
+interface UIMenuProps {
+    onNew: () => void;
+    onOpen: () => Promise<boolean>;
+    onSave: () => Promise<void>;
+    onSaveAs: () => Promise<boolean>;
+    fileName: string | null;
+    isDirty: boolean;
+}
+
 function HoverMenuItem({ element }: { element: MenuElement }) {
     const ref = useRef<HTMLElement>(null);
     const [isOpen, setOpen] = useState(false);
@@ -55,15 +64,15 @@ function HoverMenuItem({ element }: { element: MenuElement }) {
     );
 }
 
-export default function UIMenu() {
+export default function UIMenu({ onNew, onOpen, onSave, onSaveAs, fileName, isDirty }: UIMenuProps) {
     const menuElements: MenuElement[] = [
         {
             title: 'File',
             subItems: [
-                { title: 'New', callback: () => console.log('New') },
-                { title: 'Open', callback: () => console.log('Open') },
-                { title: 'Save', callback: () => console.log('Save') },
-                { title: 'Save As', callback: () => console.log('Save As') },
+                { title: 'New', callback: onNew },
+                { title: 'Open', callback: () => onOpen() },
+                { title: 'Save', callback: () => onSave() },
+                { title: 'Save As', callback: () => onSaveAs() },
             ]
         },
         { title: 'Browse', callback: () => console.log('Browse'), disabled: true },
@@ -74,6 +83,7 @@ export default function UIMenu() {
     ];
 
     return (
+        <>
         <div className="absolute top-0 left-0 z-50 py-0 bg-white rounded-none rounded-br-2xl px-0 shadow-2xl hover:bg-gray-100 transition-all group hover:p-2">
             <div className='flex items-center justify-center pl-2 pr-1 group-hover:pr-0'>
                 <MenuIcon className="w-6 h-6 min-w-6 min-h-6" />
@@ -84,6 +94,11 @@ export default function UIMenu() {
                 </div>
             </div>
         </div>
+        <div className='absolute top-0 right-0 z-50 py-2 px-4 bg-black/50 rounded-bl-2xl text-white text-sm'>
+            {fileName || 'Untitled'}{isDirty ? ' *' : ''}
+        </div>
+        </>
     );
+
 }
 

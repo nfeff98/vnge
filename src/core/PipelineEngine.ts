@@ -17,6 +17,12 @@ export class PipelineEngine {
   }
 
   removeNode(nodeId: string) {
+    // Cleanup the node before removing it
+    const node = this.nodes.get(nodeId);
+    if (node) {
+      node.cleanup();
+    }
+    
     this.nodes.delete(nodeId);
     // Remove all connections involving this node
     this.connections = this.connections.filter(
@@ -133,6 +139,11 @@ export class PipelineEngine {
   }
 
   clear() {
+    // Cleanup all nodes before clearing (stops camera, closes MediaPipe, etc.)
+    this.nodes.forEach(node => {
+      node.cleanup();
+    });
+    
     this.nodes.clear();
     this.connections = [];
   }
