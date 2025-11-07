@@ -1,4 +1,4 @@
-import { BaseNode } from '../core/BaseNode';
+import { BaseNode, NodeDataType } from '../core/BaseNode';
 import { Clock } from 'lucide-react';
 
 export class TimeNode extends BaseNode {
@@ -19,7 +19,7 @@ export class TimeNode extends BaseNode {
     return {
       type: 'time',
       inputs: [],
-      outputs: ['time'],
+      outputs: [{ id: 'time', type: NodeDataType.NUMBER }],
       parameters: {},
       maxInputs: 0,
       maxOutputs: 10

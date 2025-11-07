@@ -1,4 +1,4 @@
-import { BaseNode } from '../core/BaseNode';
+import { BaseNode, NodeDataType } from '../core/BaseNode';
 import { Video } from 'lucide-react';
 
 export class CameraNode extends BaseNode {
@@ -88,7 +88,7 @@ export class CameraNode extends BaseNode {
     return {
       type: 'camera',
       inputs: [],
-      outputs: ['video'],
+      outputs: [{ id: 'video', type: NodeDataType.VIDEO }],
       parameters: {},
       maxInputs: 0,
       maxOutputs: 10

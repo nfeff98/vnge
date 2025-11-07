@@ -1,4 +1,4 @@
-import { BaseNode } from '../core/BaseNode';
+import { BaseNode, NodeDataType } from '../core/BaseNode';
 import { Grid3x3 } from 'lucide-react';
 import { NodeParameterType } from '../core/BaseNode';
 
@@ -20,8 +20,14 @@ export class TileAndOffsetNode extends BaseNode {
   getNodeDefinition() {
     return {
       type: 'tileAndOffset',
-      inputs: ['image', 'tileX', 'tileY', 'offsetX', 'offsetY'],
-      outputs: ['image'],
+      inputs: [
+        { id: 'image', type: NodeDataType.CANVAS, accepts: [NodeDataType.CANVAS, NodeDataType.VIDEO] },
+        { id: 'tileX', type: NodeDataType.NUMBER },
+        { id: 'tileY', type: NodeDataType.NUMBER },
+        { id: 'offsetX', type: NodeDataType.NUMBER },
+        { id: 'offsetY', type: NodeDataType.NUMBER }
+      ],
+      outputs: [{ id: 'image', type: NodeDataType.CANVAS }],
       parameters: {
         tileX: { type: NodeParameterType.NUMBER, value: 1, min: 0.1, max: 10, step: 0.1 },
         tileY: { type: NodeParameterType.NUMBER, value: 1, min: 0.1, max: 10, step: 0.1 },

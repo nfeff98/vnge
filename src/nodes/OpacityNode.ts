@@ -1,4 +1,4 @@
-import { BaseNode } from '../core/BaseNode';
+import { BaseNode, NodeDataType } from '../core/BaseNode';
 import { Droplet } from 'lucide-react';
 import { NodeParameterType } from '../core/BaseNode';
 
@@ -20,8 +20,8 @@ export class OpacityNode extends BaseNode {
   getNodeDefinition() {
     return {
       type: 'opacity',
-      inputs: ['image'],
-      outputs: ['image'],
+      inputs: [{ id: 'image', type: NodeDataType.CANVAS, accepts: [NodeDataType.CANVAS, NodeDataType.VIDEO] }],
+      outputs: [{ id: 'image', type: NodeDataType.CANVAS }],
       parameters: {
         opacity: { type: NodeParameterType.NUMBER, value: 1, min: 0, max: 1, step: 0.01 }
       },

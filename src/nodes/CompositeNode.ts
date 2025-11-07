@@ -1,4 +1,4 @@
-import { BaseNode } from '../core/BaseNode';
+import { BaseNode, NodeDataType } from '../core/BaseNode';
 import { Layers } from 'lucide-react';
 import { NodeParameterType } from '../core/BaseNode';
 import type { Color } from './ColorNode';
@@ -20,8 +20,11 @@ export class CompositeNode extends BaseNode {
   getNodeDefinition() {
     return {
       type: 'composite',
-      inputs: ['base', 'layer'],
-      outputs: ['composite'],
+      inputs: [
+        { id: 'base', type: NodeDataType.CANVAS, accepts: [NodeDataType.CANVAS, NodeDataType.VIDEO, NodeDataType.COLOR] },
+        { id: 'layer', type: NodeDataType.CANVAS, accepts: [NodeDataType.CANVAS, NodeDataType.VIDEO, NodeDataType.COLOR] }
+      ],
+      outputs: [{ id: 'composite', type: NodeDataType.CANVAS }],
       parameters: {
         blendMode: {
           type: NodeParameterType.ENUM,
@@ -122,7 +125,7 @@ export class CompositeNode extends BaseNode {
   }
 
   private async ensureCanvas(
-    input: HTMLCanvasElement | HTMLVideoElement | Color | null,
+    input: HTMLCanvasElement | HTMLVideoElement | WebGLTexture | Color | null,
     width: number = 640,
     height: number = 480
   ): Promise<HTMLCanvasElement | null> {
@@ -138,6 +141,33 @@ export class CompositeNode extends BaseNode {
       ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a ?? 1})`;
       ctx.fillRect(0, 0, width, height);
       
+      return canvas;
+    }
+
+    // Check if input is a WebGLTexture (has __width, __height metadata)
+    if ((input as any).__width && (input as any).__height && (input as any).__gl) {
+      const texture = input as any;
+      const gl = texture.__gl as WebGLRenderingContext;
+      const texWidth = texture.__width;
+      const texHeight = texture.__height;
+
+      // Convert texture to canvas
+      const canvas = this.createCanvas(texWidth, texHeight);
+      const framebuffer = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, input, 0);
+
+      const pixels = new Uint8Array(texWidth * texHeight * 4);
+      gl.readPixels(0, 0, texWidth, texHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+      const ctx = canvas.getContext('2d')!;
+      const imageData = ctx.createImageData(texWidth, texHeight);
+      imageData.data.set(pixels);
+      ctx.putImageData(imageData, 0, 0);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.deleteFramebuffer(framebuffer);
+
       return canvas;
     }
 

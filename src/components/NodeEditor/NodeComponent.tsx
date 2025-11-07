@@ -2,6 +2,7 @@ import { Handle, Position } from '@xyflow/react';
 import { BaseNode } from '../../core/BaseNode';
 import { useState, useEffect, useRef } from 'react';
 import { Settings, Loader2, Power, ChevronUp, ChevronDown } from 'lucide-react';
+import ColorPicker from '../ColorPicker';
 
 
 interface NodeComponentProps {
@@ -125,11 +126,11 @@ export default function NodeComponent({ data }: NodeComponentProps) {
 
   // Categorize inputs based on whether they have matching parameters
   const visibleParameterKeys = Object.keys(nodeDefinition.parameters);
-  const inputsWithMatchingParams = nodeDefinition.inputs.filter(inputId => 
-    visibleParameterKeys.includes(inputId)
+  const inputsWithMatchingParams = nodeDefinition.inputs.filter(input => 
+    visibleParameterKeys.includes(input.id)
   );
-  const inputsWithoutMatchingParams = nodeDefinition.inputs.filter(inputId => 
-    !visibleParameterKeys.includes(inputId)
+  const inputsWithoutMatchingParams = nodeDefinition.inputs.filter(input => 
+    !visibleParameterKeys.includes(input.id)
   );
   return (
     <div 
@@ -155,12 +156,12 @@ export default function NodeComponent({ data }: NodeComponentProps) {
       </div>}
       
       {/* Input handles - when settings CLOSED, stack all at same position */}
-      {!settingsOpen && nodeDefinition.inputs.map((inputId) => (
+      {!settingsOpen && nodeDefinition.inputs.map((input) => (
         <Handle
-          key={`input-${inputId}`}
+          key={`input-${input.id}`}
           type="target"
           position={Position.Left}
-          id={inputId}
+          id={input.id}
           style={{ 
             background: visualConfig.color,
             top: 30
@@ -172,12 +173,12 @@ export default function NodeComponent({ data }: NodeComponentProps) {
       {/* (These are handled within the parameter rendering loop below) */}
       
       {/* Output handles */}
-      {nodeDefinition.outputs.map((outputId, index) => (
+      {nodeDefinition.outputs.map((output, index) => (
         <Handle
-          key={`output-${outputId}`}
+          key={`output-${output.id}`}
           type="source"
           position={Position.Right}
-          id={outputId}
+          id={output.id}
           style={{ 
             background: visualConfig.color,
             top: 30 + (index * 20)
@@ -219,21 +220,39 @@ export default function NodeComponent({ data }: NodeComponentProps) {
       {/* Labeled inputs (without matching parameters) - only when settings open */}
       {settingsOpen && inputsWithoutMatchingParams.length > 0 && (
         <div className="">
-          {inputsWithoutMatchingParams.map((inputId) => (
-            <div key={inputId} className="text-xs text-gray-400 relative text-left ">
-              <Handle
-                type="target"
-                position={Position.Left}
-                id={inputId}
-                style={{ 
-                  background: visualConfig.color,
-                  top: '50%',
-                  transform: 'translate(-15px, -50%)'
-                }}
-              />
-              {inputId}
-            </div>
-          ))}
+          {inputsWithoutMatchingParams.map((input) => {
+            const inputValue = node?.getInput(input.id);
+            const isColorInput = input.type === 'color';
+            
+            return (
+              <div key={input.id} className="text-xs text-gray-400 relative text-left">
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id={input.id}
+                  style={{ 
+                    background: visualConfig.color,
+                    top: '50%',
+                    transform: 'translate(-15px, -50%)'
+                  }}
+                />
+                {isColorInput && inputValue ? (
+                  <div className="flex items-center gap-2">
+                    <span>{input.id}</span>
+                    <div 
+                      className="w-6 h-6 rounded border-2 border-gray-600"
+                      style={{ 
+                        backgroundColor: `rgba(${(inputValue as any).r}, ${(inputValue as any).g}, ${(inputValue as any).b}, ${(inputValue as any).a})` 
+                      }}
+                      title="Color from input"
+                    />
+                  </div>
+                ) : (
+                  input.id
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -241,7 +260,7 @@ export default function NodeComponent({ data }: NodeComponentProps) {
 
             <div className="space-y-3 mt-1">
               {Object.entries(nodeDefinition.parameters).map(([key, parameter]) => {
-                const hasMatchingInput = inputsWithMatchingParams.includes(key);
+                const hasMatchingInput = inputsWithMatchingParams.some(input => input.id === key);
                 return (
                 <div key={key} className="flex flex-col relative">
                   {/* Inline input handle for this parameter */}
@@ -315,6 +334,12 @@ export default function NodeComponent({ data }: NodeComponentProps) {
                         <option key={option} value={option}>{option}</option>
                       ))}
                     </select>
+                  ) : parameter.type === 'color' ? (
+                    <ColorPicker
+                      color={getDisplayValue(key, parameter)}
+                      onChange={(color) => handleParameterChange(key, color)}
+                      disabled={hasMatchingInput && node?.getInput(key) !== null}
+                    />
                   ) : parameter.type === 'array' ? (
                     <input 
                       type="text"

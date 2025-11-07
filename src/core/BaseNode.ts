@@ -1,11 +1,38 @@
 export interface NodeInput {
   id: string;
-  data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | Color | null;
+  data: HTMLCanvasElement | HTMLVideoElement | WebGLTexture | number | string | boolean | Color | null;
 }
 
 export interface NodeOutput {
   id: string;
-  data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | Color | null;
+  data: HTMLCanvasElement | HTMLVideoElement | WebGLTexture | number | string | boolean | Color | null;
+}
+
+/**
+ * Data types for node inputs/outputs
+ * Designed to be WebGL-ready for future texture-based operations
+ */
+export enum NodeDataType {
+  CANVAS = 'canvas',      // HTMLCanvasElement (Canvas2D rendering)
+  TEXTURE = 'texture',    // WebGLTexture (future WebGL support)
+  VIDEO = 'video',        // HTMLVideoElement
+  COLOR = 'color',        // Color object {r, g, b, a}
+  NUMBER = 'number',      // Single numeric value
+  VECTOR2 = 'vector2',    // {x, y} - for positions, scales, etc.
+  VECTOR3 = 'vector3',    // {x, y, z} - for 3D operations
+  VECTOR4 = 'vector4',    // {x, y, z, w} - for quaternions, RGBA, etc.
+  BOOLEAN = 'boolean',    // True/false
+  STRING = 'string',      // Text
+  ANY = 'any'             // Accepts any type (for flexible nodes)
+}
+
+/**
+ * Typed input/output definition for nodes
+ */
+export interface TypedNodeIO {
+  id: string;
+  type: NodeDataType;
+  accepts?: NodeDataType[];  // For inputs: which types can connect (defaults to [type])
 }
 
 export enum NodeParameterType {
@@ -14,7 +41,8 @@ export enum NodeParameterType {
   BOOLEAN = 'boolean',
   ARRAY = 'array',
   OBJECT = 'object',
-  ENUM = 'enum'
+  ENUM = 'enum',
+  COLOR = 'color'
 }
 
 export interface NodeParameter {
@@ -32,8 +60,8 @@ export interface NodeParameters {
 
 export interface NodeDefinition {
   type: string;
-  inputs: string[];
-  outputs: string[];
+  inputs: TypedNodeIO[];
+  outputs: TypedNodeIO[];
   parameters: NodeParameters;
   maxInputs: number;
   maxOutputs: number;
@@ -129,28 +157,28 @@ export abstract class BaseNode {
     
     // For nodes with single input and single output, pass through
     if (nodeDefinition.inputs.length === 1 && nodeDefinition.outputs.length === 1) {
-      const inputData = this.getInput(nodeDefinition.inputs[0]);
+      const inputData = this.getInput(nodeDefinition.inputs[0].id);
       if (inputData) {
-        this.setOutput(nodeDefinition.outputs[0], inputData);
+        this.setOutput(nodeDefinition.outputs[0].id, inputData);
       }
     }
   }
   
   abstract getNodeDefinition(): NodeDefinition;
 
-  setInput(inputId: string, data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | Color | null) {
+  setInput(inputId: string, data: HTMLCanvasElement | HTMLVideoElement | WebGLTexture | number | string | boolean | Color | null) {
     this.inputs.set(inputId, { id: inputId, data });
   }
 
-  getInput(inputId: string): HTMLCanvasElement | HTMLVideoElement | number | string | boolean | Color | null {
+  getInput(inputId: string): HTMLCanvasElement | HTMLVideoElement | WebGLTexture | number | string | boolean | Color | null {
     return this.inputs.get(inputId)?.data || null;
   }
 
-  setOutput(outputId: string, data: HTMLCanvasElement | HTMLVideoElement | number | string | boolean | Color | null) {
+  setOutput(outputId: string, data: HTMLCanvasElement | HTMLVideoElement | WebGLTexture | number | string | boolean | Color | null) {
     this.outputs.set(outputId, { id: outputId, data });
   }
 
-  getOutput(outputId: string): HTMLCanvasElement | HTMLVideoElement | number | string | boolean | Color | null {
+  getOutput(outputId: string): HTMLCanvasElement | HTMLVideoElement | WebGLTexture | number | string | boolean | Color | null {
     return this.outputs.get(outputId)?.data || null;
   }
 

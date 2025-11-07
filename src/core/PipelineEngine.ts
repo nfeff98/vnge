@@ -1,4 +1,4 @@
-import { BaseNode } from './BaseNode';
+import { BaseNode, NodeDataType, type TypedNodeIO } from './BaseNode';
 
 export interface Connection {
   from: string;
@@ -30,7 +30,33 @@ export class PipelineEngine {
     );
   }
 
-  connect(fromNodeId: string, fromOutput: string, toNodeId: string, toInput: string) {
+  connect(fromNodeId: string, fromOutput: string, toNodeId: string, toInput: string): boolean {
+    const fromNode = this.nodes.get(fromNodeId);
+    const toNode = this.nodes.get(toNodeId);
+    
+    if (!fromNode || !toNode) {
+      console.warn('Cannot connect: One or both nodes not found');
+      return false;
+    }
+    
+    // Validate type compatibility
+    const fromDef = fromNode.getNodeDefinition();
+    const toDef = toNode.getNodeDefinition();
+    
+    const outputDef = fromDef.outputs.find(o => o.id === fromOutput);
+    const inputDef = toDef.inputs.find(i => i.id === toInput);
+    
+    if (!outputDef || !inputDef) {
+      console.warn('Cannot connect: Invalid input/output handles');
+      return false;
+    }
+    
+    // Check type compatibility
+    if (!this.isTypeCompatible(outputDef, inputDef)) {
+      console.warn(`Type mismatch: Cannot connect ${outputDef.type} output to ${inputDef.type} input (accepts: ${inputDef.accepts?.join(', ') || inputDef.type})`);
+      return false;
+    }
+    
     const connection: Connection = {
       from: fromNodeId,
       to: toNodeId,
@@ -39,6 +65,46 @@ export class PipelineEngine {
     };
     
     this.connections.push(connection);
+    return true;
+  }
+  
+  /**
+   * Check if an output type can connect to an input type
+   */
+  private isTypeCompatible(output: TypedNodeIO, input: TypedNodeIO): boolean {
+    // ANY type accepts everything
+    if (input.type === NodeDataType.ANY) {
+      return true;
+    }
+    
+    // If input has explicit accepts list, check against it
+    if (input.accepts && input.accepts.length > 0) {
+      return input.accepts.includes(output.type);
+    }
+    
+    // Otherwise, types must match exactly
+    return output.type === input.type;
+  }
+  
+  /**
+   * Validate if a connection would be valid (without actually creating it)
+   * Useful for UI to show invalid connections
+   */
+  validateConnection(fromNodeId: string, fromOutput: string, toNodeId: string, toInput: string): boolean {
+    const fromNode = this.nodes.get(fromNodeId);
+    const toNode = this.nodes.get(toNodeId);
+    
+    if (!fromNode || !toNode) return false;
+    
+    const fromDef = fromNode.getNodeDefinition();
+    const toDef = toNode.getNodeDefinition();
+    
+    const outputDef = fromDef.outputs.find(o => o.id === fromOutput);
+    const inputDef = toDef.inputs.find(i => i.id === toInput);
+    
+    if (!outputDef || !inputDef) return false;
+    
+    return this.isTypeCompatible(outputDef, inputDef);
   }
 
   disconnect(fromNodeId: string, toNodeId: string) {

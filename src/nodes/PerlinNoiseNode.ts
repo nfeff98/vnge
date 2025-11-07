@@ -1,4 +1,4 @@
-import { BaseNode } from '../core/BaseNode';
+import { BaseNode, NodeDataType } from '../core/BaseNode';
 import { Cloud } from 'lucide-react';
 import { NodeParameterType } from '../core/BaseNode';
 import type { Color } from './ColorNode';
@@ -22,8 +22,11 @@ export class PerlinNoiseNode extends BaseNode {
   getNodeDefinition() {
     return {
       type: 'perlinNoise',
-      inputs: ['color1', 'color2'], // Optional color inputs
-      outputs: ['image'],
+      inputs: [
+        { id: 'color1', type: NodeDataType.COLOR },
+        { id: 'color2', type: NodeDataType.COLOR }
+      ],
+      outputs: [{ id: 'image', type: NodeDataType.CANVAS }],
       parameters: {
         width: { type: NodeParameterType.NUMBER, value: 640, min: 1, max: 3840, step: 1 },
         height: { type: NodeParameterType.NUMBER, value: 480, min: 1, max: 2160, step: 1 },

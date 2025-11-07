@@ -14,6 +14,9 @@ import { TimeNode } from '../nodes/TimeNode';
 import { MathNode } from '../nodes/MathNode';
 import { MirrorNode } from '../nodes/MirrorNode';
 import { TileAndOffsetNode } from '../nodes/TileAndOffsetNode';
+import { GradientNode } from '../nodes/GradientNode';
+import { TextureToCanvasNode } from '../nodes/TextureToCanvasNode';
+import { DisplacementNode } from '../nodes/DisplacementNode';
 
 export interface SerializedNode {
   id: string;
@@ -214,6 +217,15 @@ function createNodeInstance(
       break;
     case 'tileandoffset':
       node = new TileAndOffsetNode(id);
+      break;
+    case 'gradient':
+      node = new GradientNode(id);
+      break;
+    case 'texturetocanvas':
+      node = new TextureToCanvasNode(id);
+      break;
+    case 'displacement':
+      node = new DisplacementNode(id);
       break;
     case 'color':
       node = new ColorNode(id);

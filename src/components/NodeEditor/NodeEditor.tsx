@@ -30,6 +30,9 @@ import NodeComponent from './NodeComponent';
 import ContextMenu from './ContextMenu';
 import { MirrorNode } from '../../nodes/MirrorNode';
 import { TileAndOffsetNode } from '../../nodes/TileAndOffsetNode';
+import { GradientNode } from '../../nodes/GradientNode';
+import { TextureToCanvasNode } from '../../nodes/TextureToCanvasNode';
+import { DisplacementNode } from '../../nodes/DisplacementNode';
 import UIMenu from './UIMenu';
 import { useProjectManager } from '../../hooks/useProjectManager';
 import type { BaseNode } from '../../core/BaseNode';
@@ -237,44 +240,61 @@ export default function NodeEditor() {
     }
   }, [pipeline, isExecuting, edges]);
 
-  const onConnect = useCallback(
-    (params: Connection) => {
-      // Validate connection limits
-      const sourceNode = pipeline.getNode(params.source!);
-      const targetNode = pipeline.getNode(params.target!);
+  // Validate connection during drag (for visual feedback)
+  const isValidConnection = useCallback(
+    (connection: Connection | Edge) => {
+      if (!connection.source || !connection.target) return false;
       
-      if (!sourceNode || !targetNode) {
-        console.warn('Cannot connect: Node not found');
-        return;
-      }
+      const sourceNode = pipeline.getNode(connection.source);
+      const targetNode = pipeline.getNode(connection.target);
+      
+      if (!sourceNode || !targetNode) return false;
 
       const sourceDef = sourceNode.getNodeDefinition();
       const targetDef = targetNode.getNodeDefinition();
 
       // Check if target node can accept more inputs
-      const currentInputs = edges.filter(edge => edge.target === params.target).length;
-      if (currentInputs >= targetDef.maxInputs) {
-        console.warn(`Cannot connect: Target node ${params.target} has reached max inputs (${targetDef.maxInputs})`);
-        return;
-      }
+      const currentInputs = edges.filter(edge => edge.target === connection.target).length;
+      if (currentInputs >= targetDef.maxInputs) return false;
 
       // Check if source node can provide more outputs
-      const currentOutputs = edges.filter(edge => edge.source === params.source).length;
-      if (currentOutputs >= sourceDef.maxOutputs) {
-        console.warn(`Cannot connect: Source node ${params.source} has reached max outputs (${sourceDef.maxOutputs})`);
+      const currentOutputs = edges.filter(edge => edge.source === connection.source).length;
+      if (currentOutputs >= sourceDef.maxOutputs) return false;
+
+      // Validate type compatibility
+      return pipeline.validateConnection(
+        connection.source,
+        connection.sourceHandle || 'default',
+        connection.target,
+        connection.targetHandle || 'default'
+      );
+    },
+    [edges, pipeline]
+  );
+
+  const onConnect = useCallback(
+    (params: Connection) => {
+      // Use the same validation logic
+      if (!isValidConnection(params)) {
+        console.warn('Cannot connect: Connection validation failed');
         return;
       }
 
       const edge = addEdge(params, edges);
       setEdges(edge);
       
-      // Update pipeline connections
-      pipeline.connect(
+      // Update pipeline connections (now returns boolean for success)
+      const connected = pipeline.connect(
         params.source!,
         params.sourceHandle || 'default',
         params.target!,
         params.targetHandle || 'default'
       );
+
+      if (!connected) {
+        console.error('Failed to create pipeline connection');
+        return;
+      }
 
       // Clear any pipeline errors when making new connections
       setPipelineError(null);
@@ -284,7 +304,7 @@ export default function NodeEditor() {
         executePipeline();
       }, 100); // Small delay to ensure state is updated
     },
-    [edges, pipeline, executePipeline]
+    [edges, pipeline, executePipeline, isValidConnection]
   );
 
   // Context menu handlers
@@ -350,6 +370,15 @@ export default function NodeEditor() {
         break;
       case 'tileAndOffset':
         pipelineNode = new TileAndOffsetNode(nodeId);
+        break;
+      case 'gradient':
+        pipelineNode = new GradientNode(nodeId);
+        break;
+      case 'textureToCanvas':
+        pipelineNode = new TextureToCanvasNode(nodeId);
+        break;
+      case 'displacement':
+        pipelineNode = new DisplacementNode(nodeId);
         break;
       case 'color':
         pipelineNode = new ColorNode(nodeId);
@@ -527,6 +556,7 @@ export default function NodeEditor() {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        isValidConnection={isValidConnection}
         nodeTypes={nodeTypes}
         onNodeContextMenu={handleNodeContextMenu}
         onEdgeContextMenu={handleEdgeContextMenu}

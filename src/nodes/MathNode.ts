@@ -1,4 +1,4 @@
-import { BaseNode } from '../core/BaseNode';
+import { BaseNode, NodeDataType } from '../core/BaseNode';
 import { Calculator } from 'lucide-react';
 import { NodeParameterType } from '../core/BaseNode';
 
@@ -17,8 +17,11 @@ export class MathNode extends BaseNode {
   getNodeDefinition() {
     return {
       type: 'math',
-      inputs: ['a', 'b'],
-      outputs: ['result'],
+      inputs: [
+        { id: 'a', type: NodeDataType.NUMBER },
+        { id: 'b', type: NodeDataType.NUMBER }
+      ],
+      outputs: [{ id: 'result', type: NodeDataType.NUMBER }],
       parameters: {
         operation: {
           type: NodeParameterType.ENUM,
@@ -82,10 +85,10 @@ export class MathNode extends BaseNode {
         result = a * b;
         break;
       case 'divide':
-        result = a / b;
+        result = b !== 0 ? a / b : 0;
         break;
       case 'modulo':
-        result = a % b;
+        result = b !== 0 ? a % b : 0;
         break;
       case 'pow':
         result = Math.pow(a, b);

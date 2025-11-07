@@ -1,4 +1,4 @@
-import { BaseNode, NodeParameterType } from '../core/BaseNode';
+import { BaseNode, NodeDataType, NodeParameterType } from '../core/BaseNode';
 import { Hands, HAND_CONNECTIONS, type Results } from '@mediapipe/hands';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 import { Hand } from 'lucide-react';
@@ -75,8 +75,11 @@ export class HandTrackingNode extends BaseNode {
   getNodeDefinition() {
     return {
       type: 'handTracking',
-      inputs: ['video'],
-      outputs: ['result'],
+      inputs: [{ id: 'video', type: NodeDataType.CANVAS, accepts: [NodeDataType.CANVAS, NodeDataType.VIDEO] }],
+      outputs: [
+        { id: 'result', type: NodeDataType.CANVAS },
+        { id: 'landmarks', type: NodeDataType.ANY }
+      ],
       parameters: {
         maxNumHands: { 
           type: NodeParameterType.NUMBER, 
@@ -116,8 +119,18 @@ export class HandTrackingNode extends BaseNode {
 
     const inputElement = this.getInput('video');
     
+    // HandTrackingNode doesn't support WebGLTexture - only Canvas/Video
+    // (If you want to use WebGL textures, convert them to Canvas first with TextureToCanvasNode)
+    if (inputElement && (inputElement as any).__gl) {
+      console.warn('HandTrackingNode: WebGLTexture input not supported. Use TextureToCanvasNode first.');
+      return;
+    }
+    
+    // After filtering out WebGLTexture, cast to supported types
+    const validInputElement = inputElement as HTMLCanvasElement | HTMLVideoElement | null | number | string | boolean | Color;
+    
     // Validate input and stop processing if invalid
-    if (!this.isValidInput(inputElement) || !this.hands) {
+    if (!this.isValidInput(validInputElement) || !this.hands) {
       this.isProcessing = false;
       // Clear output when input becomes invalid
       if (this.outputCanvas) {
@@ -132,12 +145,12 @@ export class HandTrackingNode extends BaseNode {
 
     // Handle both HTMLVideoElement and HTMLCanvasElement inputs
     let inputWidth: number, inputHeight: number;
-    if (inputElement instanceof HTMLVideoElement) {
-      inputWidth = inputElement.videoWidth;
-      inputHeight = inputElement.videoHeight;
-    } else if (inputElement instanceof HTMLCanvasElement) {
-      inputWidth = inputElement.width;
-      inputHeight = inputElement.height;
+    if (validInputElement instanceof HTMLVideoElement) {
+      inputWidth = validInputElement.videoWidth;
+      inputHeight = validInputElement.videoHeight;
+    } else if (validInputElement instanceof HTMLCanvasElement) {
+      inputWidth = validInputElement.width;
+      inputHeight = validInputElement.height;
     } else {
       // This shouldn't happen due to validation above, but TypeScript needs it
       return;
@@ -154,9 +167,9 @@ export class HandTrackingNode extends BaseNode {
     // Handle transparent background parameter
     const transparentBackground = this.getParameter('transparentBackground') || false;
     
-    if (transparentBackground && inputElement) {
+    if (transparentBackground && validInputElement) {
       // Draw the input image as background
-      ctx.drawImage(inputElement, 0, 0, this.outputCanvas.width, this.outputCanvas.height);
+      ctx.drawImage(validInputElement as any, 0, 0, this.outputCanvas.width, this.outputCanvas.height);
     } else {
       // Clear to black background
       ctx.clearRect(0, 0, this.outputCanvas.width, this.outputCanvas.height);
@@ -171,7 +184,7 @@ export class HandTrackingNode extends BaseNode {
       this.isProcessing = true;
       
       // Double-check input is still valid before processing
-      if (!this.isValidInput(inputElement)) {
+      if (!this.isValidInput(validInputElement)) {
         this.isProcessing = false;
         return;
       }
@@ -206,7 +219,7 @@ export class HandTrackingNode extends BaseNode {
       });
 
       // Send the image to MediaPipe
-      await this.hands.send({ image: inputElement! });
+      await this.hands.send({ image: validInputElement as any });
       
       // Wait for results
       const results = await resultsPromise;

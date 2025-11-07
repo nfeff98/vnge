@@ -1,4 +1,4 @@
-import { BaseNode, NodeParameterType } from '../core/BaseNode';
+import { BaseNode, NodeDataType, NodeParameterType } from '../core/BaseNode';
 import { FlipHorizontal } from 'lucide-react';
 
 export class MirrorNode extends BaseNode {
@@ -21,8 +21,8 @@ export class MirrorNode extends BaseNode {
     getNodeDefinition() {
         return {
             type: 'mirror',
-            inputs: ['image'],
-            outputs: ['image'],
+            inputs: [{ id: 'image', type: NodeDataType.CANVAS, accepts: [NodeDataType.CANVAS, NodeDataType.VIDEO] }],
+            outputs: [{ id: 'image', type: NodeDataType.CANVAS }],
             parameters: { axis: { type: NodeParameterType.ENUM, value: this.axis, options: ['horizontal', 'vertical'] } },
             maxInputs: 1,
             maxOutputs: 1

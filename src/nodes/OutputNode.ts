@@ -1,4 +1,4 @@
-import { BaseNode } from '../core/BaseNode';
+import { BaseNode, NodeDataType } from '../core/BaseNode';
 import { Monitor } from 'lucide-react';
 import type { Color } from './ColorNode';
 
@@ -23,7 +23,7 @@ export class OutputNode extends BaseNode {
   getNodeDefinition() {
     return {
       type: 'output',
-      inputs: ['image'],
+      inputs: [{ id: 'image', type: NodeDataType.ANY, accepts: [NodeDataType.CANVAS, NodeDataType.VIDEO, NodeDataType.COLOR] }],
       outputs: [],
       parameters: {},
       maxInputs: 1,
