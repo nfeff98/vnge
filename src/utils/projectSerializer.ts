@@ -17,6 +17,7 @@ import { TileAndOffsetNode } from '../nodes/TileAndOffsetNode';
 import { GradientNode } from '../nodes/GradientNode';
 import { TextureToCanvasNode } from '../nodes/TextureToCanvasNode';
 import { DisplacementNode } from '../nodes/DisplacementNode';
+import { TrailNode } from '../nodes/TrailNode';
 
 export interface SerializedNode {
   id: string;
@@ -244,6 +245,9 @@ function createNodeInstance(
       break;
     case 'math':
       node = new MathNode(id);
+      break;
+    case 'trail':
+      node = new TrailNode(id);
       break;
     default:
       return null;

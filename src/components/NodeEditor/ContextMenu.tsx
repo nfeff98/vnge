@@ -9,7 +9,7 @@ import { CompositeNode } from '../../nodes/CompositeNode';
 import { OpacityNode } from '../../nodes/OpacityNode';
 import { MathNode } from '../../nodes/MathNode';
 import { TimeNode } from '../../nodes/TimeNode';
-import { Video, Hand, Monitor, Trash2, FlipHorizontal, Grid3x3, Palette, Cloud, Layers, Droplet, Clock, Calculator, Droplets, ImageDown, Move } from 'lucide-react';
+import { Video, Hand, Monitor, Trash2, FlipHorizontal, Grid3x3, Palette, Cloud, Layers, Droplet, Clock, Calculator, Droplets, ImageDown, Move, Zap } from 'lucide-react';
 
 interface ContextMenuProps {
   x: number;
@@ -37,6 +37,7 @@ const nodeTypes = [
   { type: 'perlinNoise', name: 'Perlin Noise', icon: Cloud },
   { type: 'composite', name: 'Composite', icon: Layers },
   { type: 'opacity', name: 'Opacity', icon: Droplet },
+  { type: 'trail', name: 'Trail', icon: Zap },
   { type: 'time', name: 'Time', icon: Clock },
   { type: 'math', name: 'Math', icon: Calculator },
 ];

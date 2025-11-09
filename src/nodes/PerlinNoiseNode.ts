@@ -37,7 +37,7 @@ export class PerlinNoiseNode extends BaseNode {
         seed: { type: NodeParameterType.NUMBER, value: 0, min: 0, max: 10000, step: 1 }
       },
       maxInputs: 2,
-      maxOutputs: 1
+      maxOutputs: 5
     };
   }
 

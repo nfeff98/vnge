@@ -35,7 +35,7 @@ export class TileAndOffsetNode extends BaseNode {
         offsetY: { type: NodeParameterType.NUMBER, value: 0, min: -5, max: 5, step: 0.1 }
       },
       maxInputs: 5,
-      maxOutputs: 1
+      maxOutputs: 5
     };
   }
 

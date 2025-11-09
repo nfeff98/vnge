@@ -33,6 +33,7 @@ import { TileAndOffsetNode } from '../../nodes/TileAndOffsetNode';
 import { GradientNode } from '../../nodes/GradientNode';
 import { TextureToCanvasNode } from '../../nodes/TextureToCanvasNode';
 import { DisplacementNode } from '../../nodes/DisplacementNode';
+import { TrailNode } from '../../nodes/TrailNode';
 import UIMenu from './UIMenu';
 import { useProjectManager } from '../../hooks/useProjectManager';
 import type { BaseNode } from '../../core/BaseNode';
@@ -398,6 +399,9 @@ export default function NodeEditor() {
         break;
       case 'math':
         pipelineNode = new MathNode(nodeId);
+        break;
+      case 'trail':
+        pipelineNode = new TrailNode(nodeId);
         break;
       default:
         return;
