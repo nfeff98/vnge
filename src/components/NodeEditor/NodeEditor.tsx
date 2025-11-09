@@ -36,6 +36,7 @@ import { DisplacementNode } from '../../nodes/DisplacementNode';
 import UIMenu from './UIMenu';
 import { useProjectManager } from '../../hooks/useProjectManager';
 import type { BaseNode } from '../../core/BaseNode';
+import { Maximize2, X } from 'lucide-react';
 
 const nodeTypes: NodeTypes = {
   default: NodeComponent,
@@ -541,9 +542,15 @@ export default function NodeEditor() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [projectManager.projectState.isDirty]);    
 
+  const [fullScreen, setFullScreen] = useState(false);
+
+  const toggleFullScreen = () => {
+    setFullScreen(!fullScreen);
+  };
+
   const windowWidth = window.innerWidth;
   const windowHeight = window.innerHeight;
-  const outputCanvasScaleFactor = 0.25;
+  const outputCanvasScaleFactor = fullScreen ? 1 : 0.25;
   const outputCanvasWidth = windowWidth * outputCanvasScaleFactor;
   const aspectRatio = 16 / 9;
   const outputCanvasHeight = outputCanvasWidth / aspectRatio;
@@ -577,14 +584,20 @@ export default function NodeEditor() {
       {/* Output Canvas */}
       <div style={{
         position: 'fixed',
-        bottom: 20,
-        right: 20,
+        bottom: fullScreen ? 0 : 20,
+        right: fullScreen ? 0 : 20,
         border: '2px solid #ccc',
         borderRadius: 8,
         backgroundColor: '#000',
         zIndex: 1000,
         overflow: 'hidden',
+        top: fullScreen ? 0 : undefined,
+        left: fullScreen ? 0 : undefined,
+       
       }}>
+        <button onClick={toggleFullScreen} className="absolute top-0 right-0">
+          {fullScreen ? <X size={16} /> : <Maximize2 size={16} />}
+        </button>
         <canvas
           ref={canvasRef}
           width={outputCanvasWidth}
