@@ -17,7 +17,13 @@ import '@xyflow/react/dist/style.css';
 
 import { PipelineEngine } from '../../core/PipelineEngine';
 import { CameraNode } from '../../nodes/CameraNode';
-import { HandTrackingNode } from '../../nodes/HandTrackingNode';
+import { MediaPipeNode } from '../../nodes/MediaPipeNode';
+import { HandCenterNode } from '../../nodes/HandCenterNode';
+import { HeadPoseNode } from '../../nodes/HeadPoseNode';
+import { LandmarkExtractorNode } from '../../nodes/LandmarkExtractorNode';
+import { ArrayOperationsNode } from '../../nodes/ArrayOperationsNode';
+import { Vec3SplitNode } from '../../nodes/Vec3SplitNode';
+import { Vec3ToColorNode } from '../../nodes/Vec3ToColorNode';
 import { OutputNode } from '../../nodes/OutputNode';
 import { ColorNode } from '../../nodes/ColorNode';
 import { PerlinNoiseNode } from '../../nodes/PerlinNoiseNode';
@@ -360,8 +366,27 @@ export default function NodeEditor() {
       case 'camera':
         pipelineNode = new CameraNode(nodeId);
         break;
-      case 'handTracking':
-        pipelineNode = new HandTrackingNode(nodeId);
+      case 'mediapipe':
+      case 'handTracking':  // Backward compatibility
+        pipelineNode = new MediaPipeNode(nodeId);
+        break;
+      case 'handCenter':
+        pipelineNode = new HandCenterNode(nodeId);
+        break;
+      case 'headPose':
+        pipelineNode = new HeadPoseNode(nodeId);
+        break;
+      case 'landmarkExtractor':
+        pipelineNode = new LandmarkExtractorNode(nodeId);
+        break;
+      case 'arrayOperations':
+        pipelineNode = new ArrayOperationsNode(nodeId);
+        break;
+      case 'vec3Split':
+        pipelineNode = new Vec3SplitNode(nodeId);
+        break;
+      case 'vec3ToColor':
+        pipelineNode = new Vec3ToColorNode(nodeId);
         break;
       case 'output':
         pipelineNode = new OutputNode(nodeId);

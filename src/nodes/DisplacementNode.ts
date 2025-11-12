@@ -50,7 +50,7 @@ export class DisplacementNode extends BaseWebGLNode {
       type: 'displacement',
       inputs: [
         { id: 'image', type: NodeDataType.CANVAS, accepts: [NodeDataType.CANVAS, NodeDataType.VIDEO, NodeDataType.TEXTURE] },
-        { id: 'displacementMap', type: NodeDataType.CANVAS, accepts: [NodeDataType.CANVAS, NodeDataType.TEXTURE] }
+        { id: 'd_map', type: NodeDataType.CANVAS, accepts: [NodeDataType.CANVAS, NodeDataType.TEXTURE] }
       ],
       outputs: [{ id: 'image', type: NodeDataType.TEXTURE }],
       parameters: {
@@ -69,7 +69,7 @@ export class DisplacementNode extends BaseWebGLNode {
   protected getShaderUniforms(): Record<string, any> {
     // Get textures from inputs (auto-converted by base class)
     const imageTexture = this.getInputAsTexture('image');
-    const displacementTexture = this.getInputAsTexture('displacementMap');
+    const displacementTexture = this.getInputAsTexture('d_map');
 
     // Get parameters
     const strengthX = this.getParameter('strengthX') as number;

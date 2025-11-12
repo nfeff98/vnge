@@ -172,8 +172,8 @@ export default function NodeComponent({ data }: NodeComponentProps) {
       {/* Input handles for params - rendered inline with parameter fields */}
       {/* (These are handled within the parameter rendering loop below) */}
       
-      {/* Output handles */}
-      {nodeDefinition.outputs.map((output, index) => (
+      {/* Output handles - when settings CLOSED, stack all at same position */}
+      {!settingsOpen && nodeDefinition.outputs.map((output) => (
         <Handle
           key={`output-${output.id}`}
           type="source"
@@ -181,21 +181,20 @@ export default function NodeComponent({ data }: NodeComponentProps) {
           id={output.id}
           style={{ 
             background: visualConfig.color,
-            top: 30 + (index * 20)
+            top: 30
           }}
         />
       ))}
 
 <div className="absolute top-3 right-3 flex gap-2">
-      {/* Settings button */}
-      {Object.keys(nodeDefinition.parameters).length > 0 && (
-        <button 
-          onClick={handleToggleSettings} 
-          className="text-gray-500 hover:text-gray-300 focus:outline-none focus:ring-0 transition-colors p-0"
-        >
-          <Settings size={16} />
-        </button>
-      )}
+      {/* Expand/Settings button - always show to display I/O labels */}
+      <button 
+        onClick={handleToggleSettings} 
+        className="text-gray-500 hover:text-gray-300 focus:outline-none focus:ring-0 transition-colors p-0"
+        title={settingsOpen ? 'Collapse' : 'Expand'}
+      >
+        <Settings size={16} />
+      </button>
       
       {/* Enable/Disable toggle */}
       {!hideDisableToggle && (
@@ -217,46 +216,68 @@ export default function NodeComponent({ data }: NodeComponentProps) {
       )}
       </div>
 
-      {/* Labeled inputs (without matching parameters) - only when settings open */}
-      {settingsOpen && inputsWithoutMatchingParams.length > 0 && (
-        <div className="">
-          {inputsWithoutMatchingParams.map((input) => {
-            const inputValue = node?.getInput(input.id);
-            const isColorInput = input.type === 'color';
-            
-            return (
-              <div key={input.id} className="text-xs text-gray-400 relative text-left">
+      {/* Labeled inputs and outputs - side by side when settings open */}
+      {settingsOpen && (inputsWithoutMatchingParams.length > 0 || nodeDefinition.outputs.length > 0) && (
+        <div className="flex justify-between mb-3">
+          {/* Labeled inputs (without matching parameters) */}
+          <div className="flex-1">
+            {inputsWithoutMatchingParams.map((input) => {
+              const inputValue = node?.getInput(input.id);
+              const isColorInput = input.type === 'color';
+              
+              return (
+                <div key={input.id} className="text-xs text-gray-400 relative text-left mb-1">
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={input.id}
+                    style={{ 
+                      background: visualConfig.color,
+                      top: '50%',
+                      transform: 'translate(-15px, -50%)'
+                    }}
+                  />
+                  {isColorInput && inputValue ? (
+                    <div className="flex items-center gap-2">
+                      <span>{input.id}</span>
+                      <div 
+                        className="w-6 h-6 rounded border-2 border-gray-600"
+                        style={{ 
+                          backgroundColor: `rgba(${(inputValue as any).r}, ${(inputValue as any).g}, ${(inputValue as any).b}, ${(inputValue as any).a})` 
+                        }}
+                        title="Color from input"
+                      />
+                    </div>
+                  ) : (
+                    input.id
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Labeled outputs */}
+          <div className="flex-1">
+            {nodeDefinition.outputs.map((output) => (
+              <div key={output.id} className="text-xs text-gray-400 relative text-right mb-1">
                 <Handle
-                  type="target"
-                  position={Position.Left}
-                  id={input.id}
+                  type="source"
+                  position={Position.Right}
+                  id={output.id}
                   style={{ 
                     background: visualConfig.color,
                     top: '50%',
-                    transform: 'translate(-15px, -50%)'
+                    transform: 'translate(15px, -50%)'
                   }}
                 />
-                {isColorInput && inputValue ? (
-                  <div className="flex items-center gap-2">
-                    <span>{input.id}</span>
-                    <div 
-                      className="w-6 h-6 rounded border-2 border-gray-600"
-                      style={{ 
-                        backgroundColor: `rgba(${(inputValue as any).r}, ${(inputValue as any).g}, ${(inputValue as any).b}, ${(inputValue as any).a})` 
-                      }}
-                      title="Color from input"
-                    />
-                  </div>
-                ) : (
-                  input.id
-                )}
+                {output.id}
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
       )}
 
-      {settingsOpen && (
+      {settingsOpen && Object.keys(nodeDefinition.parameters).length > 0 && (
 
             <div className="space-y-3 mt-1">
               {Object.entries(nodeDefinition.parameters).map(([key, parameter]) => {

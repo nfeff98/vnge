@@ -1,0 +1,33 @@
+/* Context Menu Specific Styles */
+.context-menu .szh-menu__item {
+  color: white;
+}
+
+.context-menu .szh-menu__item:hover {
+  background-color: #3a3a3a;
+}
+
+.context-menu .szh-menu__item--disabled {
+  color: #888;
+}
+
+/* Submenu styling */
+.context-menu .szh-menu__submenu .szh-menu {
+  background-color: #2a2a2a;
+  border: 1px solid #555;
+  border-radius: 8px;
+}
+
+.context-menu .szh-menu__submenu .szh-menu__item {
+  color: white;
+}
+
+.context-menu .szh-menu__submenu .szh-menu__item:hover {
+  background-color: #3a3a3a;
+}
+
+/* Arrow indicator for submenus */
+.context-menu .szh-menu__submenu > .szh-menu__item::after {
+  border-left-color: white;
+}
+

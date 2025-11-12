@@ -4,7 +4,13 @@ import { BaseNode } from '../core/BaseNode';
 
 // Import all node types for reconstruction
 import { CameraNode } from '../nodes/CameraNode';
-import { HandTrackingNode } from '../nodes/HandTrackingNode';
+import { MediaPipeNode } from '../nodes/MediaPipeNode';
+import { HandCenterNode } from '../nodes/HandCenterNode';
+import { HeadPoseNode } from '../nodes/HeadPoseNode';
+import { LandmarkExtractorNode } from '../nodes/LandmarkExtractorNode';
+import { ArrayOperationsNode } from '../nodes/ArrayOperationsNode';
+import { Vec3SplitNode } from '../nodes/Vec3SplitNode';
+import { Vec3ToColorNode } from '../nodes/Vec3ToColorNode';
 import { OutputNode } from '../nodes/OutputNode';
 import { ColorNode } from '../nodes/ColorNode';
 import { PerlinNoiseNode } from '../nodes/PerlinNoiseNode';
@@ -204,8 +210,27 @@ function createNodeInstance(
     case 'camera':
       node = new CameraNode(id);
       break;
-    case 'handtracking':
-      node = new HandTrackingNode(id);
+    case 'mediapipe':
+    case 'handtracking':  // Backward compatibility for old projects
+      node = new MediaPipeNode(id);
+      break;
+    case 'handcenter':
+      node = new HandCenterNode(id);
+      break;
+    case 'headpose':
+      node = new HeadPoseNode(id);
+      break;
+    case 'landmarkextractor':
+      node = new LandmarkExtractorNode(id);
+      break;
+    case 'arrayoperations':
+      node = new ArrayOperationsNode(id);
+      break;
+    case 'vec3split':
+      node = new Vec3SplitNode(id);
+      break;
+    case 'vec3tocolor':
+      node = new Vec3ToColorNode(id);
       break;
     case 'output':
       node = new OutputNode(id);
