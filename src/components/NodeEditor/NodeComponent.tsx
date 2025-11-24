@@ -1,8 +1,9 @@
 import { Handle, Position } from '@xyflow/react';
 import { BaseNode } from '../../core/BaseNode';
 import { useState, useEffect, useRef } from 'react';
-import { Settings, Loader2, Power, ChevronUp, ChevronDown } from 'lucide-react';
+import { Settings, Loader2, Power, ChevronUp, ChevronDown, Upload, AlertCircle } from 'lucide-react';
 import ColorPicker from '../ColorPicker';
+import { ImageNode } from '../../nodes/ImageNode';
 
 
 interface NodeComponentProps {
@@ -24,6 +25,8 @@ export default function NodeComponent({ data }: NodeComponentProps) {
   const animationFrameRef = useRef<number | null>(null);
   const settingsOpenRef = useRef(settingsOpen);
   const nodeRef = useRef(node);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleToggleSettings = () => {
     setSettingsOpen(!settingsOpen);
@@ -92,6 +95,38 @@ export default function NodeComponent({ data }: NodeComponentProps) {
     setParameterValues(prev => ({ ...prev, [key]: value }));
     parameterValuesRef.current[key] = value;
     node?.setParameter(key, value);
+  };
+
+  // Handle file upload for ImageNode
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !(node instanceof ImageNode)) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      await node.setImageFile(file);
+      // Trigger update to refresh display
+      setUpdateTrigger(prev => prev + 1);
+    } catch (error) {
+      console.error('Failed to load image:', error);
+      alert('Failed to load image. Please try again.');
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
   };
 
   // Helper to get display value - prioritize input over parameter
@@ -277,10 +312,60 @@ export default function NodeComponent({ data }: NodeComponentProps) {
         </div>
       )}
 
+      {/* Image upload UI for ImageNode */}
+      {settingsOpen && node instanceof ImageNode && (
+        <div className="mb-3 space-y-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+          
+          {node.needsImageReupload() && (
+            <div className="flex items-center gap-2 p-2 bg-yellow-900/30 border border-yellow-600 rounded text-xs text-yellow-200">
+              <AlertCircle size={14} />
+              <span>Image needs to be re-uploaded after loading project</span>
+            </div>
+          )}
+
+          <button
+            onClick={handleUploadClick}
+            disabled={isUploading}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:opacity-50 rounded text-sm text-white transition-colors"
+          >
+            {isUploading ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                <span>Loading...</span>
+              </>
+            ) : (
+              <>
+                <Upload size={14} />
+                <span>{node.getImageFile() ? 'Change Image' : 'Upload Image'}</span>
+              </>
+            )}
+          </button>
+
+          {node.getImageFile() && (
+            <div className="text-xs text-gray-400">
+              <div>File: {node.getImageFile()!.name}</div>
+              <div>Size: {(node.getImageFile()!.size / 1024).toFixed(2)} KB</div>
+            </div>
+          )}
+        </div>
+      )}
+
       {settingsOpen && Object.keys(nodeDefinition.parameters).length > 0 && (
 
             <div className="space-y-3 mt-1">
               {Object.entries(nodeDefinition.parameters).map(([key, parameter]) => {
+                // Skip internal metadata parameters for ImageNode
+                if (node instanceof ImageNode && key.startsWith('_')) {
+                  return null;
+                }
+                
                 const hasMatchingInput = inputsWithMatchingParams.some(input => input.id === key);
                 return (
                 <div key={key} className="flex flex-col relative">

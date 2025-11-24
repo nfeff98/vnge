@@ -40,6 +40,7 @@ import { GradientNode } from '../../nodes/GradientNode';
 import { TextureToCanvasNode } from '../../nodes/TextureToCanvasNode';
 import { DisplacementNode } from '../../nodes/DisplacementNode';
 import { TrailNode } from '../../nodes/TrailNode';
+import { ImageNode } from '../../nodes/ImageNode';
 import UIMenu from './UIMenu';
 import { useProjectManager } from '../../hooks/useProjectManager';
 import type { BaseNode } from '../../core/BaseNode';
@@ -365,6 +366,9 @@ export default function NodeEditor() {
     switch (nodeType) {
       case 'camera':
         pipelineNode = new CameraNode(nodeId);
+        break;
+      case 'image':
+        pipelineNode = new ImageNode(nodeId);
         break;
       case 'mediapipe':
       case 'handTracking':  // Backward compatibility

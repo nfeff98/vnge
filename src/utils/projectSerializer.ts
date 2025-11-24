@@ -24,6 +24,7 @@ import { GradientNode } from '../nodes/GradientNode';
 import { TextureToCanvasNode } from '../nodes/TextureToCanvasNode';
 import { DisplacementNode } from '../nodes/DisplacementNode';
 import { TrailNode } from '../nodes/TrailNode';
+import { ImageNode } from '../nodes/ImageNode';
 
 export interface SerializedNode {
   id: string;
@@ -273,6 +274,9 @@ function createNodeInstance(
       break;
     case 'trail':
       node = new TrailNode(id);
+      break;
+    case 'image':
+      node = new ImageNode(id);
       break;
     default:
       return null;

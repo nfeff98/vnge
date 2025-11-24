@@ -24,6 +24,7 @@ const nodeCategories = [
     icon: Image,
     nodes: [
       { type: 'camera', name: 'Camera', icon: Video },
+      { type: 'image', name: 'Image', icon: Image },
       { type: 'color', name: 'Color', icon: Palette },
       { type: 'gradient', name: 'Gradient', icon: Droplets },
       { type: 'perlinNoise', name: 'Perlin Noise', icon: Cloud },
