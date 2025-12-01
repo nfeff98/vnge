@@ -15,6 +15,7 @@ interface SegmentationParams {
   baseOpacity: number;
   edgeOpacity: number;
   sobelIntensity: number;
+  spatialCoherence?: number;
 }
 
 const SegmentationTool: React.FC = () => {
@@ -48,6 +49,7 @@ const SegmentationTool: React.FC = () => {
     baseOpacity: 0.3,
     edgeOpacity: 0.5,
     sobelIntensity: 1.0,
+    spatialCoherence: 30,
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -199,8 +201,21 @@ const SegmentationTool: React.FC = () => {
   
   const handleDownloadAnaglyph = () => {
     if (compositor) {
-      const dataUrl = compositor.toDataURL();
-      handleDownload(dataUrl, 'anaglyph.png');
+      try {
+        const dataUrl = compositor.toDataURL();
+        if (dataUrl && dataUrl !== 'data:,') {
+          handleDownload(dataUrl, 'anaglyph.png');
+        } else {
+          console.error('Failed to generate anaglyph data URL');
+          alert('Failed to generate anaglyph image. Check console for details.');
+        }
+      } catch (error) {
+        console.error('Error downloading anaglyph:', error);
+        alert('An error occurred while downloading the anaglyph. Check console for details.');
+      }
+    } else {
+      console.warn('No compositor available for download');
+      alert('Please generate the anaglyph first before downloading.');
     }
   };
 
@@ -348,6 +363,23 @@ const SegmentationTool: React.FC = () => {
                   />
                   <small style={{ display: 'block', marginTop: '0.25rem', color: '#666' }}>
                     Edge detection strength (higher = harder lines, 1.0-5.0)
+                  </small>
+                </label>
+              </div>
+
+              <div className="param-group">
+                <label>
+                  Spatial Coherence: {params.spatialCoherence || 30}
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={params.spatialCoherence || 30}
+                    onChange={(e) => setParams({ ...params, spatialCoherence: parseInt(e.target.value) })}
+                    className="param-slider"
+                  />
+                  <small style={{ display: 'block', marginTop: '0.25rem', color: '#666' }}>
+                    Encourages adjacent similar pixels to stay in same segment (higher = more contiguous regions)
                   </small>
                 </label>
               </div>
@@ -564,6 +596,19 @@ const SegmentationTool: React.FC = () => {
             
             {fullscreenImage.isLiveCompositor ? (
               <div className="fullscreen-anaglyph-wrapper">
+                {/* Segmentation Map Thumbnail */}
+                {segmentationMask && (
+                  <div className="segmentation-thumbnail">
+                    <div className="segmentation-thumbnail-header">Segmentation Map</div>
+                    <img 
+                      src={segmentationMask} 
+                      alt="Segmentation Map" 
+                      className="segmentation-thumbnail-image"
+                      title="Segmentation map showing which colors correspond to each layer"
+                    />
+                  </div>
+                )}
+                
                 {/* Toggle Button */}
                 <button 
                   className="fullscreen-toggle-button"
@@ -666,28 +711,46 @@ const SegmentationTool: React.FC = () => {
                   {compositor && layerIntensities.size > 0 && (
                     <div className="fullscreen-layer-controls">
                       <div className="layer-controls-horizontal">
-                        {compositor.getLayers().map((layer) => (
-                          <div key={layer.index} className="layer-input-group">
-                            <label className="layer-input-label">
-                              L{layer.index + 1}
-                            </label>
-                            <input
-                              type="number"
-                              min="0"
-                              max="2"
-                              step="0.1"
-                              value={layerIntensities.get(layer.index) || 1.0}
-                              onChange={(e) => {
-                                const val = parseFloat(e.target.value) || 0;
-                                const clamped = Math.max(0, Math.min(2, val));
-                                const newIntensities = new Map(layerIntensities);
-                                newIntensities.set(layer.index, clamped);
-                                setLayerIntensities(newIntensities);
-                              }}
-                              className="layer-intensity-input"
-                            />
-                          </div>
-                        ))}
+                        {compositor.getLayers().map((layer) => {
+                          const [r, g, b] = layer.segmentColor.split(',').map(Number);
+                          const colorHex = `#${[r, g, b].map(x => x.toString(16).padStart(2, '0')).join('')}`;
+                          return (
+                            <div key={layer.index} className="layer-input-group">
+                              <label className="layer-input-label">
+                                <span 
+                                  style={{ 
+                                    display: 'inline-block',
+                                    width: '12px',
+                                    height: '12px',
+                                    backgroundColor: colorHex,
+                                    borderRadius: '2px',
+                                    marginRight: '4px',
+                                    verticalAlign: 'middle',
+                                    border: '1px solid rgba(255,255,255,0.3)'
+                                  }}
+                                  title={`Segment color: RGB(${r}, ${g}, ${b})`}
+                                />
+                                L{layer.index + 1}
+                              </label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="2"
+                                step="0.1"
+                                value={layerIntensities.get(layer.index) ?? 0.0}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value);
+                                  if (isNaN(val)) return; // Don't update if invalid
+                                  const clamped = Math.max(0, Math.min(2, val));
+                                  const newIntensities = new Map(layerIntensities);
+                                  newIntensities.set(layer.index, clamped);
+                                  setLayerIntensities(newIntensities);
+                                }}
+                                className="layer-intensity-input"
+                              />
+                            </div>
+                          );
+                        })}
                       </div>
                       <div className="layer-control-buttons">
                         <button
@@ -732,12 +795,7 @@ const SegmentationTool: React.FC = () => {
               />
             )}
             
-            <div className="fullscreen-hint">
-              {fullscreenImage.isLiveCompositor 
-                ? 'Use sliders to adjust in real-time • Click outside to close'
-                : 'Click outside or press the X to close'
-              }
-            </div>
+           
           </div>
         </div>
       )}

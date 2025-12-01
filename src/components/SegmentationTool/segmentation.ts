@@ -13,6 +13,7 @@ interface SegmentationParams {
   separationAngle: number;
   edgeWeight?: number;
   sobelIntensity: number;
+  spatialCoherence?: number;
 }
 
 /**
@@ -236,6 +237,7 @@ function kMeansSegmentation(
   const labWeight = (params.labThreshold || 50) / 50; // Normalize around 1.0
   const hueWeight = (params.hueThreshold || 30) / 30; // Normalize around 1.0
   const edgeWeight = (params.edgeWeight || 50) / 50; // Normalize around 1.0
+  const spatialCoherence = (params.spatialCoherence || 0) / 100; // Normalize to 0-1 range
   const numPixels = width * height;
   const colors: number[][] = [];
   const labColors: number[][] = [];
@@ -273,13 +275,31 @@ function kMeansSegmentation(
   const assignments = new Array(numPixels).fill(0);
 
   for (let iter = 0; iter < maxIterations; iter++) {
-    // Assignment step - using weighted distance based on thresholds and edges
+    // Assignment step - using weighted distance based on thresholds, edges, and spatial coherence
     for (let i = 0; i < numPixels; i++) {
       let minDist = Infinity;
       let bestCluster = 0;
 
       // Get edge strength at this pixel
       const edgeStrength = edgeMap[i];
+      
+      // Get pixel coordinates for neighbor checking
+      const y = Math.floor(i / width);
+      const x = i % width;
+      
+      // Check 4-neighbors (up, down, left, right) for spatial coherence
+      const neighbors: number[] = [];
+      if (y > 0) neighbors.push(i - width); // up
+      if (y < height - 1) neighbors.push(i + width); // down
+      if (x > 0) neighbors.push(i - 1); // left
+      if (x < width - 1) neighbors.push(i + 1); // right
+      
+      // Count how many neighbors belong to each cluster
+      const neighborClusterCounts = new Array(k).fill(0);
+      for (const neighborIdx of neighbors) {
+        const neighborCluster = assignments[neighborIdx];
+        neighborClusterCounts[neighborCluster]++;
+      }
 
       for (let c = 0; c < k; c++) {
         // Combine RGB, LAB (lightness), and Hue distances with weights
@@ -292,7 +312,12 @@ function kMeansSegmentation(
         // This keeps edges as boundaries between segments
         const edgeResistance = 1.0 + (edgeStrength * edgeWeight * 0.5);
         
-        const dist = (rgbDist + labDist * 10 + hueDist * 10) * edgeResistance;
+        // Spatial coherence: reduce distance if neighbors belong to this cluster
+        // More neighbors in cluster c = bigger reduction
+        const neighborBonus = neighborClusterCounts[c] / neighbors.length; // 0-1, fraction of neighbors in cluster c
+        const spatialReduction = 1.0 - (spatialCoherence * neighborBonus * 0.5); // Reduce by up to 50% of spatialCoherence
+        
+        const dist = (rgbDist + labDist * 10 + hueDist * 10) * edgeResistance * spatialReduction;
         
         if (dist < minDist) {
           minDist = dist;

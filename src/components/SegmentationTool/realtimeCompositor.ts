@@ -33,6 +33,10 @@ export class RealtimeAnaglyphCompositor {
   
   // Container to hold all stacked canvases
   private container: HTMLDivElement;
+  
+  // Current anaglyph parameters (stored for download)
+  private currentStereoIntensity: number = 0;
+  private currentSeparationAngle: number = 0;
 
   constructor(
     originalImage: HTMLImageElement, 
@@ -291,6 +295,10 @@ export class RealtimeAnaglyphCompositor {
    * Each segment moves as a coherent unit based on its depth
    */
   updateAnaglyph(stereoIntensity: number, separationAngle: number): void {
+    // Store current parameters for download
+    this.currentStereoIntensity = stereoIntensity;
+    this.currentSeparationAngle = separationAngle;
+    
     // Convert angle to radians
     const angleRad = (separationAngle * Math.PI) / 180;
     const cosAngle = Math.cos(angleRad);
@@ -354,39 +362,117 @@ export class RealtimeAnaglyphCompositor {
 
   /**
    * Convert current state to data URL for download
+   * Renders the container at full resolution by drawing each layer in order
+   * This matches the display exactly by replicating the same rendering pipeline
    */
   toDataURL(): string {
-    // Create a temporary canvas to composite the result
-    const outputCanvas = document.createElement('canvas');
-    outputCanvas.width = this.width;
-    outputCanvas.height = this.height;
-    const ctx = outputCanvas.getContext('2d')!;
+    try {
+      // Recalculate shifts using stored parameters (same logic as updateAnaglyph)
+      const angleRad = (this.currentSeparationAngle * Math.PI) / 180;
+      const cosAngle = Math.cos(angleRad);
+      const sinAngle = Math.sin(angleRad);
 
-    // Draw black background
-    ctx.fillStyle = 'black';
-    ctx.fillRect(0, 0, this.width, this.height);
+      // Create two canvases: one for red channel, one for cyan channel
+      // We'll render everything to both, then combine at the end
+      const redCanvas = document.createElement('canvas');
+      redCanvas.width = this.width;
+      redCanvas.height = this.height;
+      const redCtx = redCanvas.getContext('2d')!;
 
-    // Use lighten blend mode
-    ctx.globalCompositeOperation = 'lighten';
+      const cyanCanvas = document.createElement('canvas');
+      cyanCanvas.width = this.width;
+      cyanCanvas.height = this.height;
+      const cyanCtx = cyanCanvas.getContext('2d')!;
 
-    // Draw all layers in order with their transforms
-    for (const layer of this.layers) {
-      const parseTransform = (transform: string): { x: number; y: number } => {
-        const match = transform.match(/translate\(([^,]+)px,\s*([^)]+)px\)/);
-        if (match) {
-          return { x: parseFloat(match[1]), y: parseFloat(match[2]) };
-        }
-        return { x: 0, y: 0 };
-      };
+      // Draw black background on both
+      redCtx.fillStyle = 'black';
+      redCtx.fillRect(0, 0, this.width, this.height);
+      cyanCtx.fillStyle = 'black';
+      cyanCtx.fillRect(0, 0, this.width, this.height);
 
-      const redShift = parseTransform(layer.redCanvas.style.transform);
-      const cyanShift = parseTransform(layer.cyanCanvas.style.transform);
+      // Step 1: Draw base image first (bottom layer, normal blend, with opacity)
+      const baseOpacity = parseFloat(this.baseImageCanvas.style.opacity || '0.3');
+      if (baseOpacity > 0) {
+        redCtx.globalAlpha = baseOpacity;
+        cyanCtx.globalAlpha = baseOpacity;
+        redCtx.globalCompositeOperation = 'source-over';
+        cyanCtx.globalCompositeOperation = 'source-over';
+        redCtx.drawImage(this.baseImageCanvas, 0, 0);
+        cyanCtx.drawImage(this.baseImageCanvas, 0, 0);
+        redCtx.globalAlpha = 1.0;
+        cyanCtx.globalAlpha = 1.0;
+      }
 
-      ctx.drawImage(layer.redCanvas, redShift.x, redShift.y);
-      ctx.drawImage(layer.cyanCanvas, cyanShift.x, cyanShift.y);
+      // Step 2: Draw all layers with their calculated shifts (lighten blend mode)
+      redCtx.globalCompositeOperation = 'lighten';
+      cyanCtx.globalCompositeOperation = 'lighten';
+
+      for (const layer of this.layers) {
+        // Recalculate shift (EXACT same logic as updateAnaglyph)
+        const shiftMagnitude = (layer.depth - 0.5) * this.currentStereoIntensity * layer.intensityMultiplier;
+        const shiftX = shiftMagnitude * cosAngle;
+        const shiftY = shiftMagnitude * sinAngle;
+
+        // Left eye (red) shifts negative - EXACT same as updateAnaglyph
+        const redShiftX = -shiftX;
+        const redShiftY = -shiftY;
+        
+        // Right eye (cyan) shifts positive - EXACT same as updateAnaglyph
+        const cyanShiftX = shiftX;
+        const cyanShiftY = shiftY;
+
+        // Draw red canvas to red channel canvas at shifted position
+        // Use direct coordinates to ensure shift is applied correctly
+        redCtx.drawImage(layer.redCanvas, redShiftX, redShiftY);
+        
+        // Draw cyan canvas to cyan channel canvas at shifted position
+        // Use direct coordinates to ensure shift is applied correctly
+        cyanCtx.drawImage(layer.cyanCanvas, cyanShiftX, cyanShiftY);
+      }
+
+      // Step 3: Draw edge overlay last (top layer, normal blend, with opacity)
+      const edgeOpacity = parseFloat(this.edgeCanvas.style.opacity || '1.0');
+      if (edgeOpacity > 0) {
+        redCtx.globalAlpha = edgeOpacity;
+        cyanCtx.globalAlpha = edgeOpacity;
+        redCtx.globalCompositeOperation = 'source-over';
+        cyanCtx.globalCompositeOperation = 'source-over';
+        redCtx.drawImage(this.edgeCanvas, 0, 0);
+        cyanCtx.drawImage(this.edgeCanvas, 0, 0);
+        redCtx.globalAlpha = 1.0;
+        cyanCtx.globalAlpha = 1.0;
+      }
+
+      // Get image data from both canvases
+      const redData = redCtx.getImageData(0, 0, this.width, this.height);
+      const cyanData = cyanCtx.getImageData(0, 0, this.width, this.height);
+
+      // Create final output canvas and combine channels
+      const outputCanvas = document.createElement('canvas');
+      outputCanvas.width = this.width;
+      outputCanvas.height = this.height;
+      const ctx = outputCanvas.getContext('2d')!;
+      const outputData = ctx.createImageData(this.width, this.height);
+
+      // Combine: Red from red canvas, Green+Blue from cyan canvas
+      for (let i = 0; i < this.width * this.height; i++) {
+        const idx = i * 4;
+        outputData.data[idx] = redData.data[idx];           // Red from red canvas
+        outputData.data[idx + 1] = cyanData.data[idx + 1]; // Green from cyan canvas
+        outputData.data[idx + 2] = cyanData.data[idx + 2]; // Blue from cyan canvas
+        outputData.data[idx + 3] = 255;                    // Alpha
+      }
+
+      ctx.putImageData(outputData, 0, 0);
+      return outputCanvas.toDataURL('image/png');
+    } catch (error) {
+      console.error('Error generating anaglyph download:', error);
+      // Fallback: return a black canvas
+      const fallbackCanvas = document.createElement('canvas');
+      fallbackCanvas.width = this.width;
+      fallbackCanvas.height = this.height;
+      return fallbackCanvas.toDataURL('image/png');
     }
-
-    return outputCanvas.toDataURL('image/png');
   }
 
   /**

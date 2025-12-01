@@ -330,6 +330,49 @@ section h2 {
   z-index: 10000;
 }
 
+.segmentation-thumbnail {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  padding: 8px;
+  z-index: 10000;
+  max-width: 200px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  transition: all 0.3s ease;
+}
+
+.segmentation-thumbnail:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7);
+  transform: scale(1.05);
+}
+
+.segmentation-thumbnail-header {
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+  text-align: center;
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.segmentation-thumbnail-image {
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  display: block;
+  max-width: 180px;
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
 .close-button:hover {
   background: rgba(255, 255, 255, 0.3);
   transform: rotate(90deg);
