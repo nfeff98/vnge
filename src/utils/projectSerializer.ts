@@ -25,6 +25,7 @@ import { TextureToCanvasNode } from '../nodes/TextureToCanvasNode';
 import { DisplacementNode } from '../nodes/DisplacementNode';
 import { TrailNode } from '../nodes/TrailNode';
 import { ImageNode } from '../nodes/ImageNode';
+import { WarpNode } from '../nodes/WarpNode';
 
 export interface SerializedNode {
   id: string;
@@ -277,6 +278,9 @@ function createNodeInstance(
       break;
     case 'image':
       node = new ImageNode(id);
+      break;
+    case 'warp':
+      node = new WarpNode(id);
       break;
     default:
       return null;

@@ -41,10 +41,13 @@ import { TextureToCanvasNode } from '../../nodes/TextureToCanvasNode';
 import { DisplacementNode } from '../../nodes/DisplacementNode';
 import { TrailNode } from '../../nodes/TrailNode';
 import { ImageNode } from '../../nodes/ImageNode';
+import { WarpNode } from '../../nodes/WarpNode';
 import UIMenu from './UIMenu';
 import { useProjectManager } from '../../hooks/useProjectManager';
 import type { BaseNode } from '../../core/BaseNode';
-import { Maximize2, X } from 'lucide-react';
+import { Maximize2, SquareArrowOutUpRight, X } from 'lucide-react';
+import { CanvasStreamManager } from '../../utils/CanvasStreamManager';
+import WarpCalibration from '../WarpCalibration';
 
 const nodeTypes: NodeTypes = {
   default: NodeComponent,
@@ -75,6 +78,14 @@ export default function NodeEditor() {
   } | null>(null);
   const [showMiniMap, setShowMiniMap] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamManagerRef = useRef<CanvasStreamManager | null>(null);
+  const fullscreenWindowRef = useRef<Window | null>(null);
+  const [streamFrameRate, setStreamFrameRate] = useState<number>(() => {
+    const saved = localStorage.getItem('vnge-stream-framerate');
+    return saved ? parseInt(saved, 10) : 15;
+  });
+  const channelIdRef = useRef<string>(`channel-${Date.now()}`);
+  const [calibratingWarpNode, setCalibratingWarpNode] = useState<WarpNode | null>(null);
 
   // Handle project loaded from file
   const handleProjectLoaded = useCallback((newNodes: Node[], newEdges: Edge[], pipelineNodes: BaseNode[]) => {
@@ -93,7 +104,10 @@ export default function NodeEditor() {
         id: 'output-1',
         type: 'default',
         position: { x: 400, y: 300 },
-        data: { node: outputNode },
+        data: { 
+          node: outputNode,
+          onStartCalibration: (warpNode: WarpNode) => setCalibratingWarpNode(warpNode)
+        },
       };
 
       setNodes([outputReactNode]);
@@ -166,7 +180,8 @@ export default function NodeEditor() {
             ...node.data, 
             node: pipeline.getNode(node.id) || null,
             inputConnections,
-            outputConnections
+            outputConnections,
+            onStartCalibration: (warpNode: WarpNode) => setCalibratingWarpNode(warpNode)
           }
         };
       })
@@ -186,7 +201,8 @@ export default function NodeEditor() {
           data: { 
             ...node.data, 
             inputConnections,
-            outputConnections
+            outputConnections,
+            onStartCalibration: (warpNode: WarpNode) => setCalibratingWarpNode(warpNode)
           }
         };
       })
@@ -432,6 +448,9 @@ export default function NodeEditor() {
       case 'trail':
         pipelineNode = new TrailNode(nodeId);
         break;
+      case 'warp':
+        pipelineNode = new WarpNode(nodeId);
+        break;
       default:
         return;
     }
@@ -444,7 +463,10 @@ export default function NodeEditor() {
       id: nodeId,
       type: 'default',
       position,
-      data: { node: pipelineNode },
+      data: { 
+        node: pipelineNode,
+        onStartCalibration: (warpNode: WarpNode) => setCalibratingWarpNode(warpNode)
+      },
     };
 
     setNodes(prev => [...prev, newNode]);
@@ -581,12 +603,113 @@ export default function NodeEditor() {
     setFullScreen(!fullScreen);
   };
 
+  // Initialize stream manager when canvas is ready
+  useEffect(() => {
+    if (canvasRef.current) {
+      if (!streamManagerRef.current) {
+        streamManagerRef.current = new CanvasStreamManager(channelIdRef.current, streamFrameRate);
+        streamManagerRef.current.setOnConnectionStateChange((state) => {
+          console.log('Stream connection state:', state);
+        });
+      }
+      // Always update canvas reference in case it changed
+      streamManagerRef.current.setCanvas(canvasRef.current);
+    }
+  }, [streamFrameRate, canvasRef.current]);
+
+  // Update frame rate in stream manager
+  useEffect(() => {
+    if (streamManagerRef.current) {
+      streamManagerRef.current.updateFrameRate(streamFrameRate);
+      localStorage.setItem('vnge-stream-framerate', streamFrameRate.toString());
+    }
+  }, [streamFrameRate]);
+
+  // Open fullscreen in new window
+  const openFullscreenWindow = useCallback(async () => {
+    if (fullscreenWindowRef.current && !fullscreenWindowRef.current.closed) {
+      // Window already open, just focus it
+      fullscreenWindowRef.current.focus();
+      return;
+    }
+
+    if (!canvasRef.current) {
+      console.error('Canvas not ready');
+      return;
+    }
+
+    // Generate new channel ID for this session
+    channelIdRef.current = `channel-${Date.now()}`;
+    
+    // Create new stream manager if needed
+    if (!streamManagerRef.current) {
+      streamManagerRef.current = new CanvasStreamManager(channelIdRef.current, streamFrameRate);
+      streamManagerRef.current.setCanvas(canvasRef.current);
+    } else {
+      // Update channel ID and recreate if needed
+      streamManagerRef.current.stop();
+      streamManagerRef.current = new CanvasStreamManager(channelIdRef.current, streamFrameRate);
+      streamManagerRef.current.setCanvas(canvasRef.current);
+    }
+
+    // Open new window
+    const baseUrl = window.location.origin + import.meta.env.BASE_URL;
+    const fullscreenUrl = `${baseUrl}fullscreen.html?channelId=${channelIdRef.current}`;
+    const newWindow = window.open(
+      fullscreenUrl,
+      'VNGE_Fullscreen',
+      'width=1920,height=1080,fullscreen=yes'
+    );
+
+    if (!newWindow) {
+      console.error('Failed to open fullscreen window. Popup may be blocked.');
+      alert('Failed to open fullscreen window. Please allow popups for this site.');
+      return;
+    }
+
+    fullscreenWindowRef.current = newWindow;
+
+    // Start streaming after a short delay to let the window load
+    setTimeout(async () => {
+      try {
+        await streamManagerRef.current?.start();
+      } catch (error) {
+        console.error('Failed to start streaming:', error);
+      }
+    }, 500);
+
+    // Handle window close
+    const checkClosed = setInterval(() => {
+      if (newWindow.closed) {
+        clearInterval(checkClosed);
+        streamManagerRef.current?.stop();
+        fullscreenWindowRef.current = null;
+      }
+    }, 500);
+  }, [streamFrameRate]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (streamManagerRef.current) {
+        streamManagerRef.current.stop();
+      }
+      if (fullscreenWindowRef.current && !fullscreenWindowRef.current.closed) {
+        fullscreenWindowRef.current.close();
+      }
+    };
+  }, []);
+
   const windowWidth = window.innerWidth;
   const windowHeight = window.innerHeight;
-  const outputCanvasScaleFactor = fullScreen ? 1 : 0.25;
-  const outputCanvasWidth = windowWidth * outputCanvasScaleFactor;
+  
+  // Canvas always renders at full resolution for high-quality streaming
   const aspectRatio = 16 / 9;
-  const outputCanvasHeight = outputCanvasWidth / aspectRatio;
+  const outputCanvasWidth = windowWidth; // Always full width
+  const outputCanvasHeight = outputCanvasWidth / aspectRatio; // Always full height
+  
+  // Scale factor only affects CSS display size, not actual canvas resolution
+  const outputCanvasDisplayScale = fullScreen ? 1 : 0.25;
 
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
@@ -628,18 +751,92 @@ export default function NodeEditor() {
         left: fullScreen ? 0 : undefined,
        
       }}>
-        <button onClick={toggleFullScreen} className="absolute top-0 right-0">
-          {fullScreen ? <X size={16} /> : <Maximize2 size={16} />}
-        </button>
+        <div style={{ position: 'absolute', top: 0, right: 0, display: 'flex', gap: 4, zIndex: 1001 }}>
+          <button 
+            onClick={openFullscreenWindow}
+            title="Open in new window"
+            style={{
+              background: 'rgba(0, 0, 0, 0.7)',
+              border: '1px solid #ccc',
+              borderRadius: 4,
+              padding: 4,
+              cursor: 'pointer',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <SquareArrowOutUpRight size={16} />
+          </button>
+          <button 
+            onClick={toggleFullScreen}
+            title="Toggle fullscreen"
+            style={{
+              background: 'rgba(0, 0, 0, 0.7)',
+              border: '1px solid #ccc',
+              borderRadius: 4,
+              padding: 4,
+              cursor: 'pointer',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            {fullScreen ? <X size={16} /> : <Maximize2 size={16} />}
+          </button>
+        </div>
+        <div style={{ position: 'absolute', bottom: 4, left: 4, zIndex: 1001 }}>
+          <input
+            type="number"
+            min="1"
+            max="30"
+            value={streamFrameRate}
+            onChange={(e) => {
+              const value = parseInt(e.target.value, 10);
+              if (!isNaN(value) && value >= 1 && value <= 30) {
+                setStreamFrameRate(value);
+              }
+            }}
+            title="Stream frame rate (FPS)"
+            style={{
+              width: 50,
+              padding: 2,
+              fontSize: 12,
+              background: 'rgba(0, 0, 0, 0.7)',
+              border: '1px solid #ccc',
+              borderRadius: 4,
+              color: '#fff'
+            }}
+          />
+          <span style={{ fontSize: 10, color: '#fff', marginLeft: 4 }}>FPS</span>
+        </div>
         <canvas
           ref={canvasRef}
           width={outputCanvasWidth}
           height={outputCanvasHeight}
           style={{
             display: 'block',
+            width: `${outputCanvasWidth * outputCanvasDisplayScale}px`,
+            height: `${outputCanvasHeight * outputCanvasDisplayScale}px`,
           }}
         />
         
+        {/* Warp Calibration Overlay */}
+        {calibratingWarpNode && (
+          <WarpCalibration
+            warpNode={calibratingWarpNode}
+            canvasRef={canvasRef}
+            onComplete={() => {
+              setCalibratingWarpNode(null);
+              // Trigger pipeline update
+              setTimeout(() => executePipeline(), 100);
+            }}
+            onCancel={() => setCalibratingWarpNode(null)}
+          />
+        )}
+
         {/* Error Overlay */}
         {pipelineError && (
           <div style={{
@@ -709,3 +906,4 @@ export default function NodeEditor() {
     </div>
   );
 }
+

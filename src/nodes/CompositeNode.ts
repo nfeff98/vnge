@@ -70,27 +70,54 @@ export class CompositeNode extends BaseNode {
       return;
     }
 
-    // Determine dimensions - prioritize canvas/video dimensions, fallback to default
+    // Determine dimensions - prioritize canvas/video/texture dimensions, fallback to default
     let targetWidth = 640;
     let targetHeight = 480;
     
-    if (base && !(base as any).r) {
-      const baseEl = base as HTMLCanvasElement | HTMLVideoElement;
-      if (baseEl instanceof HTMLVideoElement) {
-        targetWidth = baseEl.videoWidth || 640;
-        targetHeight = baseEl.videoHeight || 480;
-      } else {
-        targetWidth = baseEl.width || 640;
-        targetHeight = baseEl.height || 480;
+    // Check base for dimensions
+    if (base) {
+      // Check if it's a WebGLTexture
+      if ((base as any).__width && (base as any).__height) {
+        targetWidth = (base as any).__width;
+        targetHeight = (base as any).__height;
+      } else if (!(base as any).r) {
+        // It's a canvas or video element
+        const baseEl = base as HTMLCanvasElement | HTMLVideoElement;
+        if (baseEl instanceof HTMLVideoElement) {
+          targetWidth = baseEl.videoWidth || 640;
+          targetHeight = baseEl.videoHeight || 480;
+        } else if (baseEl instanceof HTMLCanvasElement) {
+          targetWidth = baseEl.width || 640;
+          targetHeight = baseEl.height || 480;
+        }
       }
-    } else if (layer && !(layer as any).r) {
-      const layerEl = layer as HTMLCanvasElement | HTMLVideoElement;
-      if (layerEl instanceof HTMLVideoElement) {
-        targetWidth = layerEl.videoWidth || 640;
-        targetHeight = layerEl.videoHeight || 480;
-      } else {
-        targetWidth = layerEl.width || 640;
-        targetHeight = layerEl.height || 480;
+    }
+    
+    // Check layer for dimensions (use larger resolution if both have dimensions)
+    if (layer) {
+      let layerWidth = 640;
+      let layerHeight = 480;
+      
+      // Check if it's a WebGLTexture
+      if ((layer as any).__width && (layer as any).__height) {
+        layerWidth = (layer as any).__width;
+        layerHeight = (layer as any).__height;
+      } else if (!(layer as any).r) {
+        // It's a canvas or video element
+        const layerEl = layer as HTMLCanvasElement | HTMLVideoElement;
+        if (layerEl instanceof HTMLVideoElement) {
+          layerWidth = layerEl.videoWidth || 640;
+          layerHeight = layerEl.videoHeight || 480;
+        } else if (layerEl instanceof HTMLCanvasElement) {
+          layerWidth = layerEl.width || 640;
+          layerHeight = layerEl.height || 480;
+        }
+      }
+      
+      // Use the maximum resolution to preserve quality
+      if (layerWidth * layerHeight > targetWidth * targetHeight) {
+        targetWidth = layerWidth;
+        targetHeight = layerHeight;
       }
     }
 
@@ -112,11 +139,13 @@ export class CompositeNode extends BaseNode {
 
     // Draw base layer
     ctx.globalCompositeOperation = 'source-over';
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(baseCanvas, 0, 0);
 
-    // Draw layer with blend mode
+    // Draw layer with blend mode (both canvases should already be at the same resolution)
     ctx.globalCompositeOperation = blendMode as GlobalCompositeOperation;
-    ctx.drawImage(layerCanvas, 0, 0, baseCanvas.width, baseCanvas.height);
+    ctx.drawImage(layerCanvas, 0, 0);
 
     // Reset
     ctx.globalCompositeOperation = 'source-over';
@@ -151,19 +180,28 @@ export class CompositeNode extends BaseNode {
       const texWidth = texture.__width;
       const texHeight = texture.__height;
 
-      // Convert texture to canvas
-      const canvas = this.createCanvas(texWidth, texHeight);
+      // Convert texture to canvas at target resolution
+      const canvas = this.createCanvas(width, height);
       const framebuffer = gl.createFramebuffer();
       gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, input, 0);
 
+      // Read pixels at original texture resolution
       const pixels = new Uint8Array(texWidth * texHeight * 4);
       gl.readPixels(0, 0, texWidth, texHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
 
-      const ctx = canvas.getContext('2d')!;
-      const imageData = ctx.createImageData(texWidth, texHeight);
+      // Create temporary canvas at texture resolution
+      const tempCanvas = this.createCanvas(texWidth, texHeight);
+      const tempCtx = tempCanvas.getContext('2d')!;
+      const imageData = tempCtx.createImageData(texWidth, texHeight);
       imageData.data.set(pixels);
-      ctx.putImageData(imageData, 0, 0);
+      tempCtx.putImageData(imageData, 0, 0);
+
+      // Scale to target resolution using high-quality scaling
+      const ctx = canvas.getContext('2d')!;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(tempCanvas, 0, 0, width, height);
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.deleteFramebuffer(framebuffer);
@@ -177,13 +215,33 @@ export class CompositeNode extends BaseNode {
         return null;
       }
 
-      const canvas = this.createCanvas(video.videoWidth, video.videoHeight);
+      // Create canvas at target resolution and scale video to it
+      const canvas = this.createCanvas(width, height);
       const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(video, 0, 0);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(video, 0, 0, width, height);
       return canvas;
     }
 
-    return input as HTMLCanvasElement;
+    // Handle HTMLCanvasElement - scale to target resolution if dimensions differ
+    if (input instanceof HTMLCanvasElement) {
+      const sourceCanvas = input as HTMLCanvasElement;
+      if (sourceCanvas.width === width && sourceCanvas.height === height) {
+        // Already at target resolution, return as-is
+        return sourceCanvas;
+      }
+      
+      // Scale to target resolution
+      const canvas = this.createCanvas(width, height);
+      const ctx = canvas.getContext('2d')!;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(sourceCanvas, 0, 0, width, height);
+      return canvas;
+    }
+
+    return null;
   }
 
   cleanup() {

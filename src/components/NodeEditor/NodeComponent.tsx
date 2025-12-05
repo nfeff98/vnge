@@ -4,6 +4,17 @@ import { useState, useEffect, useRef } from 'react';
 import { Settings, Loader2, Power, ChevronUp, ChevronDown, Upload, AlertCircle } from 'lucide-react';
 import ColorPicker from '../ColorPicker';
 import { ImageNode } from '../../nodes/ImageNode';
+import WarpEditor from '../WarpEditor';
+import { WarpNode } from '../../nodes/WarpNode';
+
+interface NodeComponentProps {
+  data: {
+    node: BaseNode | null;
+    inputConnections?: number;
+    outputConnections?: number;
+    onStartCalibration?: (warpNode: WarpNode) => void;
+  };
+}
 
 
 interface NodeComponentProps {
@@ -11,11 +22,12 @@ interface NodeComponentProps {
     node: BaseNode | null;
     inputConnections?: number;
     outputConnections?: number;
+    onStartCalibration?: (warpNode: WarpNode) => void;
   };
 }
 
 export default function NodeComponent({ data }: NodeComponentProps) {
-  const { node, inputConnections = 0, outputConnections = 0 } = data;
+  const { node, inputConnections = 0, outputConnections = 0, onStartCalibration } = data;
   
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [parameterValues, setParameterValues] = useState<Record<string, any>>({});
@@ -27,6 +39,7 @@ export default function NodeComponent({ data }: NodeComponentProps) {
   const nodeRef = useRef(node);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [warpEditorOpen, setWarpEditorOpen] = useState(false);
 
   const handleToggleSettings = () => {
     setSettingsOpen(!settingsOpen);
@@ -357,6 +370,31 @@ export default function NodeComponent({ data }: NodeComponentProps) {
         </div>
       )}
 
+      {settingsOpen && nodeDefinition.type === 'warp' && (
+        <div className="mt-2 mb-3 space-y-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onStartCalibration && node instanceof WarpNode) {
+                onStartCalibration(node);
+              }
+            }}
+            className="w-full px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded text-sm font-medium transition-colors nodrag"
+          >
+            Quick Calibrate
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setWarpEditorOpen(true);
+            }}
+            className="w-full px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm font-medium transition-colors nodrag"
+          >
+            Edit Warp
+          </button>
+        </div>
+      )}
+
       {settingsOpen && Object.keys(nodeDefinition.parameters).length > 0 && (
 
             <div className="space-y-3 mt-1">
@@ -467,6 +505,18 @@ export default function NodeComponent({ data }: NodeComponentProps) {
                 );
               })}
             </div>
+      )}
+
+      {/* Warp Editor Modal */}
+      {warpEditorOpen && nodeDefinition.type === 'warp' && node instanceof WarpNode && (
+        <WarpEditor
+          warpNode={node as WarpNode}
+          onClose={() => setWarpEditorOpen(false)}
+          onUpdate={() => {
+            // Trigger parameter update to refresh display
+            setUpdateTrigger(prev => prev + 1);
+          }}
+        />
       )}
     </div>
   );

@@ -48,6 +48,7 @@ const nodeCategories = [
       { type: 'mirror', name: 'Mirror', icon: FlipHorizontal },
       { type: 'tileAndOffset', name: 'Tile & Offset', icon: Grid3x3 },
       { type: 'displacement', name: 'Displacement', icon: Move },
+      { type: 'warp', name: 'Warp', icon: Grid3x3 },
       { type: 'trail', name: 'Trail', icon: Wand2 },
     ]
   },

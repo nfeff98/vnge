@@ -192,6 +192,15 @@ export class WebGLRenderer {
           case 4:
             this.gl.uniform4f(location, value[0], value[1], value[2], value[3]);
             break;
+          case 9:
+            // 3x3 matrix (mat3) - expects column-major order (WebGL native format)
+            // false = don't transpose (matrix is already in column-major)
+            this.gl.uniformMatrix3fv(location, false, new Float32Array(value));
+            break;
+          case 16:
+            // 4x4 matrix (mat4) - row-major order
+            this.gl.uniformMatrix4fv(location, false, new Float32Array(value));
+            break;
         }
       } else if (typeof value === 'number') {
         // Always use float for single numbers (WebGL GLSL is picky about int uniforms)
