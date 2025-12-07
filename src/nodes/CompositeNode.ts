@@ -5,6 +5,16 @@ import type { Color } from './ColorNode';
 
 export class CompositeNode extends BaseNode {
   private outputCanvas: HTMLCanvasElement | null = null;
+  private cachedBaseCanvas: HTMLCanvasElement | null = null;
+  private cachedLayerCanvas: HTMLCanvasElement | null = null;
+  private cachedOutputCanvas: HTMLCanvasElement | null = null;
+  private lastBaseHash: string = '';
+  private lastLayerHash: string = '';
+  private lastBlendMode: string = '';
+  private lastTargetWidth: number = 0;
+  private lastTargetHeight: number = 0;
+  private lastBaseInput: any = null;
+  private lastLayerInput: any = null;
 
   constructor(id: string) {
     super(id, {
@@ -47,6 +57,10 @@ export class CompositeNode extends BaseNode {
             'color',
             'luminosity'
           ]
+        },
+        static: {
+          type: NodeParameterType.BOOLEAN,
+          value: false
         }
       },
       maxInputs: 2,
@@ -54,21 +68,69 @@ export class CompositeNode extends BaseNode {
     };
   }
 
+  /**
+   * Compute a hash for an input to detect changes
+   * For static mode, we track input reference and dimensions
+   */
+  private computeInputHash(input: any): string {
+    if (!input) return '';
+    
+    // Video is always dynamic - use currentTime
+    if (input instanceof HTMLVideoElement) {
+      return `video:${input.currentTime}:${input.videoWidth}x${input.videoHeight}`;
+    }
+    
+    // WebGLTexture - always dynamic (recreated each frame)
+    if ((input as any).__width && (input as any).__height) {
+      return `texture:${(input as any).__width}x${(input as any).__height}`;
+    }
+    
+    // Canvas - use reference and dimensions
+    if (input instanceof HTMLCanvasElement) {
+      return `canvas:${input.width}x${input.height}:${input}`;
+    }
+    
+    // Color - use RGB values
+    if ((input as any).r !== undefined) {
+      const color = input as any;
+      return `color:${color.r},${color.g},${color.b},${color.a ?? 1}`;
+    }
+    
+    return JSON.stringify(input);
+  }
+
   async executeInternal(): Promise<void> {
     const base = this.getInput('base');
     const layer = this.getInput('layer');
+    const isStatic = this.getParameter('static') as boolean;
 
     if (!base || !layer) {
       // If only base is connected, pass it through
       if (base) {
         this.setOutput('composite', base);
       }
+      // Clear caches when inputs disconnected
+      this.cachedBaseCanvas = null;
+      this.cachedLayerCanvas = null;
+      this.cachedOutputCanvas = null;
+      this.lastBaseHash = '';
+      this.lastLayerHash = '';
       return;
     }
 
     if (typeof(base) !== 'object' || typeof(layer) !== 'object') {
       return;
     }
+
+    // Compute input hashes for change detection
+    const baseHash = this.computeInputHash(base);
+    const layerHash = this.computeInputHash(layer);
+    const blendMode = this.getParameter('blendMode') as string;
+
+    // Check if inputs changed (for static mode caching)
+    const baseChanged = base !== this.lastBaseInput;
+    const layerChanged = layer !== this.lastLayerInput;
+    const inputsChanged = baseChanged || layerChanged;
 
     // Determine dimensions - prioritize canvas/video/texture dimensions, fallback to default
     let targetWidth = 640;
@@ -121,9 +183,50 @@ export class CompositeNode extends BaseNode {
       }
     }
 
-    // Convert inputs to canvas
-    const baseCanvas = await this.ensureCanvas(base, targetWidth, targetHeight);
-    const layerCanvas = await this.ensureCanvas(layer, targetWidth, targetHeight);
+    // Check dimensions changed
+    const dimensionsChanged = targetWidth !== this.lastTargetWidth || targetHeight !== this.lastTargetHeight;
+
+    // In static mode, check if we can reuse cached output
+    if (isStatic && !inputsChanged && !dimensionsChanged && 
+        baseHash === this.lastBaseHash && layerHash === this.lastLayerHash && 
+        blendMode === this.lastBlendMode && this.cachedOutputCanvas) {
+      // All inputs are static and haven't changed, reuse cached output (no redo)
+      // Decrement the redo count that was added by BaseNode.execute()
+      this.redoCount = Math.max(0, this.redoCount - 1);
+      this.setOutput('composite', this.cachedOutputCanvas);
+      return; // Skip - no redo
+    }
+
+    // Actually recomputing (redo already marked by BaseNode)
+
+    // Convert inputs to canvas - cache if static mode
+    let baseCanvas: HTMLCanvasElement | null;
+    if (isStatic && !baseChanged && !dimensionsChanged && this.cachedBaseCanvas) {
+      // Base is static and hasn't changed, reuse cached canvas
+      baseCanvas = this.cachedBaseCanvas;
+    } else {
+      baseCanvas = await this.ensureCanvas(base, targetWidth, targetHeight);
+      // Cache if static mode
+      if (baseCanvas && isStatic) {
+        this.cachedBaseCanvas = baseCanvas;
+      } else {
+        this.cachedBaseCanvas = null;
+      }
+    }
+
+    let layerCanvas: HTMLCanvasElement | null;
+    if (isStatic && !layerChanged && !dimensionsChanged && this.cachedLayerCanvas) {
+      // Layer is static and hasn't changed, reuse cached canvas
+      layerCanvas = this.cachedLayerCanvas;
+    } else {
+      layerCanvas = await this.ensureCanvas(layer, targetWidth, targetHeight);
+      // Cache if static mode
+      if (layerCanvas && isStatic) {
+        this.cachedLayerCanvas = layerCanvas;
+      } else {
+        this.cachedLayerCanvas = null;
+      }
+    }
 
     if (!baseCanvas || !layerCanvas) return;
 
@@ -135,7 +238,6 @@ export class CompositeNode extends BaseNode {
     }
 
     const ctx = this.outputCanvas.getContext('2d')!;
-    const blendMode = this.getParameter('blendMode') as string;
 
     // Draw base layer
     ctx.globalCompositeOperation = 'source-over';
@@ -149,6 +251,26 @@ export class CompositeNode extends BaseNode {
 
     // Reset
     ctx.globalCompositeOperation = 'source-over';
+
+    // Cache output if static mode
+    if (isStatic) {
+      // Create a copy of the output canvas for caching
+      const cachedOutput = this.createCanvas(this.outputCanvas.width, this.outputCanvas.height);
+      const cachedCtx = cachedOutput.getContext('2d')!;
+      cachedCtx.drawImage(this.outputCanvas, 0, 0);
+      this.cachedOutputCanvas = cachedOutput;
+    } else {
+      this.cachedOutputCanvas = null;
+    }
+
+    // Update cache tracking
+    this.lastBaseHash = baseHash;
+    this.lastLayerHash = layerHash;
+    this.lastBlendMode = blendMode;
+    this.lastTargetWidth = targetWidth;
+    this.lastTargetHeight = targetHeight;
+    this.lastBaseInput = base;
+    this.lastLayerInput = layer;
 
     this.setOutput('composite', this.outputCanvas);
   }
@@ -245,7 +367,35 @@ export class CompositeNode extends BaseNode {
   }
 
   cleanup() {
-    // Canvas will be garbage collected
+    // Clear caches
+    this.cachedBaseCanvas = null;
+    this.cachedLayerCanvas = null;
+    this.cachedOutputCanvas = null;
+    this.outputCanvas = null;
+    this.lastBaseHash = '';
+    this.lastLayerHash = '';
+    this.lastBlendMode = '';
+    this.lastBaseInput = null;
+    this.lastLayerInput = null;
+  }
+
+  // Override setInput to clear cache when connections change
+  setInput(inputId: string, data: HTMLCanvasElement | HTMLVideoElement | WebGLTexture | number | string | boolean | Color | null) {
+    // If input is being disconnected (set to null), clear cache
+    if (data === null) {
+      if (inputId === 'base') {
+        this.cachedBaseCanvas = null;
+        this.lastBaseHash = '';
+        this.lastBaseInput = null;
+      } else if (inputId === 'layer') {
+        this.cachedLayerCanvas = null;
+        this.lastLayerHash = '';
+        this.lastLayerInput = null;
+      }
+      // Clear output cache when any input is disconnected
+      this.cachedOutputCanvas = null;
+    }
+    super.setInput(inputId, data);
   }
 }
 

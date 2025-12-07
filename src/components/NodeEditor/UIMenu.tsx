@@ -17,6 +17,8 @@ interface UIMenuProps {
     onSaveAs: () => Promise<boolean>;
     fileName: string | null;
     isDirty: boolean;
+    onToggleProfiler?: () => void;
+    showProfiler?: boolean;
 }
 
 function HoverMenuItem({ element }: { element: MenuElement }) {
@@ -64,7 +66,7 @@ function HoverMenuItem({ element }: { element: MenuElement }) {
     );
 }
 
-export default function UIMenu({ onNew, onOpen, onSave, onSaveAs, fileName, isDirty }: UIMenuProps) {
+export default function UIMenu({ onNew, onOpen, onSave, onSaveAs, fileName, isDirty, onToggleProfiler, showProfiler }: UIMenuProps) {
     const menuElements: MenuElement[] = [
         {
             title: 'File',
@@ -76,7 +78,12 @@ export default function UIMenu({ onNew, onOpen, onSave, onSaveAs, fileName, isDi
             ]
         },
         { title: 'Browse', callback: () => console.log('Browse'), disabled: true },
-        { title: 'Window', callback: () => console.log('Window'), disabled: true },
+        {
+            title: 'Window',
+            subItems: [
+                { title: showProfiler ? 'Hide Profiler' : 'Show Profiler', callback: onToggleProfiler },
+            ]
+        },
         { title: 'Settings', callback: () => console.log('Settings'), disabled: true },
         { title: 'Help', callback: () => console.log('Help'), disabled: true },
         { title: 'About', callback: () => console.log('About'), disabled: true },

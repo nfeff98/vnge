@@ -86,7 +86,7 @@ export class DisplacementNode extends BaseWebGLNode {
   async executeInternal(): Promise<void> {
     // Check if inputs are connected
     const imageInput = this.getInput('image');
-    const displacementInput = this.getInput('displacementMap');
+    const displacementInput = this.getInput('d_map');
 
     if (!imageInput || !displacementInput) {
       return; // Skip execution if inputs missing

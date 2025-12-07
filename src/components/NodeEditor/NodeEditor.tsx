@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo, memo } from 'react';
 import {
   ReactFlow,
   type Node,
@@ -48,9 +48,29 @@ import type { BaseNode } from '../../core/BaseNode';
 import { Maximize2, SquareArrowOutUpRight, X } from 'lucide-react';
 import { CanvasStreamManager } from '../../utils/CanvasStreamManager';
 import WarpCalibration from '../WarpCalibration';
+import Profiler from './Profiler';
+
+// Memoized NodeComponent to prevent unnecessary re-renders
+const MemoizedNodeComponent = memo(NodeComponent, (prev, next) => {
+  // Only re-render if node data actually changed
+  const prevNode = prev.data.node;
+  const nextNode = next.data.node;
+  
+  if (!prevNode && !nextNode) return true; // Both null, no change
+  if (!prevNode || !nextNode) return false; // One is null, changed
+  
+  // Compare node IDs
+  if (prevNode.id !== nextNode.id) return false;
+  
+  // Compare input/output connection counts
+  if (prev.data.inputConnections !== next.data.inputConnections) return false;
+  if (prev.data.outputConnections !== next.data.outputConnections) return false;
+  
+  return true; // No changes detected
+});
 
 const nodeTypes: NodeTypes = {
-  default: NodeComponent,
+  default: MemoizedNodeComponent,
 };
 
 const initialNodes: Node[] = [
@@ -67,7 +87,14 @@ const initialEdges: Edge[] = [];
 export default function NodeEditor() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-  const [pipeline] = useState(() => new PipelineEngine());
+  const [pipeline] = useState(() => {
+    const engine = new PipelineEngine();
+    // Enable profiling in development
+    if (import.meta.env.DEV) {
+      engine.setProfilingEnabled(true);
+    }
+    return engine;
+  });
   const [isExecuting, setIsExecuting] = useState(false);
   const [pipelineError, setPipelineError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -77,6 +104,7 @@ export default function NodeEditor() {
     edgeId?: string;
   } | null>(null);
   const [showMiniMap, setShowMiniMap] = useState(false);
+  const [showProfiler, setShowProfiler] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamManagerRef = useRef<CanvasStreamManager | null>(null);
   const fullscreenWindowRef = useRef<Window | null>(null);
@@ -86,6 +114,9 @@ export default function NodeEditor() {
   });
   const channelIdRef = useRef<string>(`channel-${Date.now()}`);
   const [calibratingWarpNode, setCalibratingWarpNode] = useState<WarpNode | null>(null);
+  const [outputNodeFPS, setOutputNodeFPS] = useState<number>(0);
+  const lastPipelineExecutionCountRef = useRef<number>(0);
+  const lastPipelineTimeRef = useRef<number>(performance.now());
 
   // Handle project loaded from file
   const handleProjectLoaded = useCallback((newNodes: Node[], newEdges: Edge[], pipelineNodes: BaseNode[]) => {
@@ -526,11 +557,58 @@ export default function NodeEditor() {
     return node ? node.visualConfig.name === 'Output' : false;
   }, [pipeline]);
 
-  // Auto-execute pipeline
+  // Check if pipeline contains MediaPipe nodes (for adaptive framerate)
+  const hasMediaPipeNode = useCallback(() => {
+    return pipeline.getAllNodes().some(node => {
+      const nodeType = node.getNodeDefinition().type;
+      return nodeType === 'mediapipe' || nodeType === 'handTracking';
+    });
+  }, [pipeline]);
+
+  // Track outputNode execution for FPS calculation (same method as Profiler)
   useEffect(() => {
-    const interval = setInterval(executePipeline, 1000 / 15); // 15 FPS to give MediaPipe time to process
+    // Initialize with current execution count
+    const execStats = pipeline.getExecutionStats();
+    lastPipelineExecutionCountRef.current = execStats.count;
+    lastPipelineTimeRef.current = performance.now();
+
+    // Update FPS periodically by tracking pipeline execution count
+    const fpsInterval = setInterval(() => {
+      const now = performance.now();
+      const execStats = pipeline.getExecutionStats();
+      const executionDelta = execStats.count - lastPipelineExecutionCountRef.current;
+      const pipelineTimeDelta = (now - lastPipelineTimeRef.current) / 1000;
+      
+      let pipelineFPS = 0;
+      if (pipelineTimeDelta >= 1 && executionDelta > 0) {
+        // Calculate FPS from execution count delta over 1 second
+        pipelineFPS = executionDelta / pipelineTimeDelta;
+        lastPipelineExecutionCountRef.current = execStats.count;
+        lastPipelineTimeRef.current = now;
+        setOutputNodeFPS(Math.round(pipelineFPS));
+      }
+    }, 1000); // Update every second for accuracy
+
+    return () => clearInterval(fpsInterval);
+  }, [pipeline]);
+
+  // Auto-execute pipeline with adaptive framerate
+  useEffect(() => {
+    // Always target 60 FPS unless MediaPipe is present (then 15 FPS)
+    const targetFPS = hasMediaPipeNode() ? 15 : 60;
+    const interval = setInterval(executePipeline, 1000 / targetFPS);
     return () => clearInterval(interval);
-  }, [executePipeline]);
+  }, [executePipeline, hasMediaPipeNode]);
+
+  // Sync stream framerate with pipeline framerate (always 60fps unless mediapipe is present)
+  useEffect(() => {
+    const targetFPS = hasMediaPipeNode() ? 15 : 60;
+    if (streamManagerRef.current && streamFrameRate !== targetFPS) {
+      streamManagerRef.current.updateFrameRate(targetFPS);
+      setStreamFrameRate(targetFPS);
+      localStorage.setItem('vnge-stream-framerate', targetFPS.toString());
+    }
+  }, [hasMediaPipeNode, streamFrameRate]);
 
   // Toggle mini map when 'm' key is pressed
   useEffect(() => {
@@ -711,6 +789,9 @@ export default function NodeEditor() {
   // Scale factor only affects CSS display size, not actual canvas resolution
   const outputCanvasDisplayScale = fullScreen ? 1 : 0.25;
 
+  // Memoize nodeTypes to prevent ReactFlow re-renders
+  const memoizedNodeTypes = useMemo(() => nodeTypes, []);
+
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
       <ReactFlow
@@ -720,7 +801,7 @@ export default function NodeEditor() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         isValidConnection={isValidConnection}
-        nodeTypes={nodeTypes}
+        nodeTypes={memoizedNodeTypes}
         onNodeContextMenu={handleNodeContextMenu}
         onEdgeContextMenu={handleEdgeContextMenu}
         onPaneContextMenu={handlePaneContextMenu}
@@ -736,6 +817,16 @@ export default function NodeEditor() {
         <Controls />
         {showMiniMap && <MiniMap />}
       </ReactFlow>
+      
+      {/* Profiler */}
+      {showProfiler && !fullScreen && (
+        <Profiler 
+          pipeline={pipeline}
+          streamManager={streamManagerRef.current}
+          isVisible={showProfiler}
+          targetPipelineFPS={hasMediaPipeNode() ? 15 : 60}
+        />
+      )}
       
       {/* Output Canvas */}
       <div style={{
@@ -787,30 +878,15 @@ export default function NodeEditor() {
             {fullScreen ? <X size={16} /> : <Maximize2 size={16} />}
           </button>
         </div>
-        <div style={{ position: 'absolute', bottom: 4, left: 4, zIndex: 1001 }}>
-          <input
-            type="number"
-            min="1"
-            max="30"
-            value={streamFrameRate}
-            onChange={(e) => {
-              const value = parseInt(e.target.value, 10);
-              if (!isNaN(value) && value >= 1 && value <= 30) {
-                setStreamFrameRate(value);
-              }
-            }}
-            title="Stream frame rate (FPS)"
-            style={{
-              width: 50,
-              padding: 2,
-              fontSize: 12,
-              background: 'rgba(0, 0, 0, 0.7)',
-              border: '1px solid #ccc',
-              borderRadius: 4,
-              color: '#fff'
-            }}
-          />
-          <span style={{ fontSize: 10, color: '#fff', marginLeft: 4 }}>FPS</span>
+        <div style={{ position: 'absolute', bottom: 4, left: 4, zIndex: 1001, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, color: '#fff' }}>
+            {outputNodeFPS} FPS
+          </span>
+          {streamManagerRef.current?.isStreaming() && (
+            <span style={{ fontSize: 12, color: '#fff' }}>
+              {streamFrameRate} FPS
+            </span>
+          )}
         </div>
         <canvas
           ref={canvasRef}
@@ -886,6 +962,8 @@ export default function NodeEditor() {
         onSaveAs={projectManager.saveAs}
         fileName={projectManager.projectState.fileName}
         isDirty={projectManager.projectState.isDirty}
+        onToggleProfiler={() => setShowProfiler(!showProfiler)}
+        showProfiler={showProfiler}
       />
 
       {/* Context Menu */}

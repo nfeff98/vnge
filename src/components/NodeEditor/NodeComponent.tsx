@@ -38,6 +38,7 @@ export default function NodeComponent({ data }: NodeComponentProps) {
   const settingsOpenRef = useRef(settingsOpen);
   const nodeRef = useRef(node);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const previousValuesRef = useRef<Record<string, any>>({});
   const [isUploading, setIsUploading] = useState(false);
   const [warpEditorOpen, setWarpEditorOpen] = useState(false);
 
@@ -82,14 +83,51 @@ export default function NodeComponent({ data }: NodeComponentProps) {
     }
   }, [node]);
 
-  // Continuously update display values when settings are open
+  // Continuously update display values when settings are open (throttled)
   useEffect(() => {
-    const updateDisplayValues = () => {
-      if (settingsOpenRef.current && nodeRef.current) {
-        // Force re-render to update input values in display
-        setUpdateTrigger(prev => prev + 1);
+    if (!settingsOpen) {
+      // Stop loop when settings are closed
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
-      // Keep looping regardless
+      return;
+    }
+
+    let lastUpdateTime = 0;
+    const updateInterval = 100; // Update at most 10 times per second (10 FPS)
+
+    const updateDisplayValues = (currentTime: number) => {
+      // Throttle updates
+      if (currentTime - lastUpdateTime < updateInterval) {
+        animationFrameRef.current = requestAnimationFrame(updateDisplayValues);
+        return;
+      }
+
+      if (settingsOpenRef.current && nodeRef.current) {
+        const currentNode = nodeRef.current;
+        
+        // Check if input values actually changed
+        let hasChanges = false;
+        const nodeDefinition = currentNode.getNodeDefinition();
+        
+        for (const input of nodeDefinition.inputs) {
+          const currentValue = currentNode.getInput(input.id);
+          const previousValue = previousValuesRef.current[input.id];
+          
+          if (currentValue !== previousValue) {
+            hasChanges = true;
+            previousValuesRef.current[input.id] = currentValue;
+          }
+        }
+
+        // Only trigger re-render if values changed
+        if (hasChanges) {
+          setUpdateTrigger(prev => prev + 1);
+        }
+      }
+      
+      lastUpdateTime = currentTime;
       animationFrameRef.current = requestAnimationFrame(updateDisplayValues);
     };
 
@@ -102,7 +140,7 @@ export default function NodeComponent({ data }: NodeComponentProps) {
         animationFrameRef.current = null;
       }
     };
-  }, []); // Empty deps - only run once on mount
+  }, [settingsOpen]); // Re-run when settings open/close
 
   const handleParameterChange = (key: string, value: any) => {
     setParameterValues(prev => ({ ...prev, [key]: value }));
@@ -339,7 +377,14 @@ export default function NodeComponent({ data }: NodeComponentProps) {
           {node.needsImageReupload() && (
             <div className="flex items-center gap-2 p-2 bg-yellow-900/30 border border-yellow-600 rounded text-xs text-yellow-200">
               <AlertCircle size={14} />
-              <span>Image needs to be re-uploaded after loading project</span>
+              <span>
+                Source media needs to be re-uploaded after loading project
+                {node.getSavedFileName() && (
+                  <span className="block mt-1 font-mono text-yellow-300">
+                    ({node.getSavedFileName()})
+                  </span>
+                )}
+              </span>
             </div>
           )}
 
@@ -395,11 +440,17 @@ export default function NodeComponent({ data }: NodeComponentProps) {
         </div>
       )}
 
-      {settingsOpen && Object.keys(nodeDefinition.parameters).length > 0 && (
-
+      {settingsOpen && (() => {
+        // For ImageNode, don't show parameters section at all (only file picker)
+        if (node instanceof ImageNode) {
+          return false;
+        }
+        // For other nodes, check if there are any parameters
+        return Object.keys(nodeDefinition.parameters).length > 0;
+      })() && (
             <div className="space-y-3 mt-1">
               {Object.entries(nodeDefinition.parameters).map(([key, parameter]) => {
-                // Skip internal metadata parameters for ImageNode
+                // Skip internal metadata parameters for ImageNode (shouldn't reach here for ImageNode, but keep for safety)
                 if (node instanceof ImageNode && key.startsWith('_')) {
                   return null;
                 }

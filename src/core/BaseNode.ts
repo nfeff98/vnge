@@ -88,6 +88,8 @@ export abstract class BaseNode {
   public visualConfig: NodeVisualConfig;
   private parameterValues: Record<string, any> = {};
   private enabled: boolean = true;
+  public redoCount: number = 0; // Made public so nodes can decrement when skipping
+  private lastRedoTime: number = 0;
 
   constructor(id: string, visualConfig: NodeVisualConfig) {
     this.id = id;
@@ -128,6 +130,31 @@ export abstract class BaseNode {
     // Default: do nothing
   }
 
+  /**
+   * Mark that this node actually recomputed its output (not cached)
+   * Call this from executeInternal() when you actually perform work
+   */
+  protected markRedo(): void {
+    this.redoCount++;
+    this.lastRedoTime = performance.now();
+  }
+
+  /**
+   * Get redo count and reset it (for profiling)
+   */
+  getAndResetRedoCount(): number {
+    const count = this.redoCount;
+    this.redoCount = 0;
+    return count;
+  }
+
+  /**
+   * Get last redo time
+   */
+  getLastRedoTime(): number {
+    return this.lastRedoTime;
+  }
+
   // Default execute implementation that handles bypass logic
   async execute(): Promise<void> {
     if (!this.isEnabled()) {
@@ -135,6 +162,10 @@ export abstract class BaseNode {
       this.passThroughInputs();
       return;
     }
+    
+    // Mark as redo by default (nodes with caching will call markRedo() themselves when needed)
+    // This ensures nodes without caching are tracked
+    this.markRedo();
     
     // Call the actual implementation
     await this.executeInternal();
