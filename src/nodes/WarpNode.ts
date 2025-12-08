@@ -67,6 +67,7 @@ export class WarpNode extends BaseWebGLNode {
       ],
       outputs: [{ id: 'image', type: NodeDataType.TEXTURE }],
       parameters: {
+        ...this.getBaseWebGLParameters(),
         // Corner positions in normalized coordinates
         // Values can be outside 0-1 for projection mapping beyond image bounds
         // Order: topLeft, topRight, bottomRight, bottomLeft

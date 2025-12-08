@@ -54,6 +54,7 @@ export class DisplacementNode extends BaseWebGLNode {
       ],
       outputs: [{ id: 'image', type: NodeDataType.TEXTURE }],
       parameters: {
+        ...this.getBaseWebGLParameters(),
         strengthX: { type: NodeParameterType.NUMBER, value: 50, min: -200, max: 200, step: 1 },
         strengthY: { type: NodeParameterType.NUMBER, value: 50, min: -200, max: 200, step: 1 }
       },

@@ -13,7 +13,7 @@ import { Vec3SplitNode } from '../nodes/Vec3SplitNode';
 import { Vec3ToColorNode } from '../nodes/Vec3ToColorNode';
 import { OutputNode } from '../nodes/OutputNode';
 import { ColorNode } from '../nodes/ColorNode';
-import { PerlinNoiseNode } from '../nodes/PerlinNoiseNode';
+import { NoiseNode } from '../nodes/NoiseNode';
 import { CompositeNode } from '../nodes/CompositeNode';
 import { OpacityNode } from '../nodes/OpacityNode';
 import { TimeNode } from '../nodes/TimeNode';
@@ -258,8 +258,9 @@ function createNodeInstance(
     case 'color':
       node = new ColorNode(id);
       break;
-    case 'perlinnoise':
-      node = new PerlinNoiseNode(id);
+    case 'noise':
+    case 'perlinnoise': // Backward compatibility
+      node = new NoiseNode(id);
       break;
     case 'composite':
       node = new CompositeNode(id);

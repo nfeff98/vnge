@@ -26,7 +26,7 @@ import { Vec3SplitNode } from '../../nodes/Vec3SplitNode';
 import { Vec3ToColorNode } from '../../nodes/Vec3ToColorNode';
 import { OutputNode } from '../../nodes/OutputNode';
 import { ColorNode } from '../../nodes/ColorNode';
-import { PerlinNoiseNode } from '../../nodes/PerlinNoiseNode';
+import { NoiseNode } from '../../nodes/NoiseNode';
 import { CompositeNode } from '../../nodes/CompositeNode';
 import { OpacityNode } from '../../nodes/OpacityNode';
 import { TimeNode } from '../../nodes/TimeNode';
@@ -461,8 +461,9 @@ export default function NodeEditor() {
       case 'color':
         pipelineNode = new ColorNode(nodeId);
         break;
-      case 'perlinNoise':
-        pipelineNode = new PerlinNoiseNode(nodeId);
+      case 'noise':
+      case 'perlinNoise': // Backward compatibility
+        pipelineNode = new NoiseNode(nodeId);
         break;
       case 'composite':
         pipelineNode = new CompositeNode(nodeId);

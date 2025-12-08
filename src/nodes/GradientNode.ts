@@ -69,6 +69,7 @@ export class GradientNode extends BaseWebGLNode {
       ],
       outputs: [{ id: 'texture', type: NodeDataType.TEXTURE }],
       parameters: {
+        ...this.getBaseWebGLParameters(),
         width: { type: NodeParameterType.NUMBER, value: 1024, min: 64, max: 4096, step: 64 },
         height: { type: NodeParameterType.NUMBER, value: 1024, min: 64, max: 4096, step: 64 },
         gradientType: {

@@ -27,7 +27,7 @@ const nodeCategories = [
       { type: 'image', name: 'Image', icon: Image },
       { type: 'color', name: 'Color', icon: Palette },
       { type: 'gradient', name: 'Gradient', icon: Droplets },
-      { type: 'perlinNoise', name: 'Perlin Noise', icon: Cloud },
+      { type: 'noise', name: 'Noise', icon: Cloud },
       { type: 'time', name: 'Time', icon: Clock },
     ]
   },
