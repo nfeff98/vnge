@@ -37,7 +37,7 @@ export class TileAndOffsetNode extends BaseWebGLNode {
     });
   }
 
-  getNodeDefinition() {
+  protected getBaseNodeDefinition() {
     return {
       type: 'tileAndOffset',
       inputs: [

@@ -25,6 +25,8 @@ const nodeCategories = [
     nodes: [
       { type: 'camera', name: 'Camera', icon: Video },
       { type: 'image', name: 'Image', icon: Image },
+      { type: 'video', name: 'Video', icon: Video },
+      { type: 'streamInput', name: 'Stream Input', icon: Monitor },
       { type: 'color', name: 'Color', icon: Palette },
       { type: 'gradient', name: 'Gradient', icon: Droplets },
       { type: 'noise', name: 'Noise', icon: Cloud },

@@ -333,7 +333,7 @@ export class NoiseNode extends BaseWebGLNode {
     });
   }
 
-  getNodeDefinition() {
+  protected getBaseNodeDefinition() {
     return {
       type: 'noise',
       inputs: [

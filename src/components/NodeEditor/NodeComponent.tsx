@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { Settings, Loader2, Power, ChevronUp, ChevronDown, Upload, AlertCircle } from 'lucide-react';
 import ColorPicker from '../ColorPicker';
 import { ImageNode } from '../../nodes/ImageNode';
+import { VideoNode } from '../../nodes/VideoNode';
+import { StreamInputNode } from '../../nodes/StreamInputNode';
 import WarpEditor from '../WarpEditor';
 import { WarpNode } from '../../nodes/WarpNode';
 
@@ -148,25 +150,35 @@ export default function NodeComponent({ data }: NodeComponentProps) {
     node?.setParameter(key, value);
   };
 
-  // Handle file upload for ImageNode
+  // Handle file upload for ImageNode and VideoNode
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !(node instanceof ImageNode)) return;
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
-      return;
-    }
+    if (!file) return;
 
     setIsUploading(true);
     try {
-      await node.setImageFile(file);
+      if (node instanceof ImageNode) {
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+          alert('Please select an image file');
+          return;
+        }
+        await node.setImageFile(file);
+      } else if (node instanceof VideoNode) {
+        // Validate file type
+        if (!file.type.startsWith('video/')) {
+          alert('Please select a video file');
+          return;
+        }
+        await node.setVideoFile(file);
+      } else {
+        return;
+      }
       // Trigger update to refresh display
       setUpdateTrigger(prev => prev + 1);
     } catch (error) {
-      console.error('Failed to load image:', error);
-      alert('Failed to load image. Please try again.');
+      console.error('Failed to load file:', error);
+      alert(`Failed to load ${node instanceof ImageNode ? 'image' : 'video'}. Please try again.`);
     } finally {
       setIsUploading(false);
       // Reset file input
@@ -415,6 +427,149 @@ export default function NodeComponent({ data }: NodeComponentProps) {
         </div>
       )}
 
+      {/* Video upload UI for VideoNode */}
+      {settingsOpen && node instanceof VideoNode && (
+        <div className="mb-3 space-y-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="video/*"
+            onChange={handleFileUpload}
+            className="hidden"
+          />
+          
+          {node.needsVideoReupload() && (
+            <div className="flex items-center gap-2 p-2 bg-yellow-900/30 border border-yellow-600 rounded text-xs text-yellow-200">
+              <AlertCircle size={14} />
+              <span>
+                Source media needs to be re-uploaded after loading project
+                {node.getSavedFileName() && (
+                  <span className="block mt-1 font-mono text-yellow-300">
+                    ({node.getSavedFileName()})
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+
+          <button
+            onClick={handleUploadClick}
+            disabled={isUploading}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:opacity-50 rounded text-sm text-white transition-colors"
+          >
+            {isUploading ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                <span>Loading...</span>
+              </>
+            ) : (
+              <>
+                <Upload size={14} />
+                <span>{node.getVideoFile() ? 'Change Video' : 'Upload Video'}</span>
+              </>
+            )}
+          </button>
+
+          {node.getVideoFile() && (
+            <div className="text-xs text-gray-400">
+              <div>File: {node.getVideoFile()!.name}</div>
+              <div>Size: {(node.getVideoFile()!.size / 1024 / 1024).toFixed(2)} MB</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Stream Input UI for StreamInputNode */}
+      {settingsOpen && node instanceof StreamInputNode && (
+        <div className="mb-3 space-y-2">
+          {node.isStreaming() ? (
+            <>
+              <div className="flex items-center gap-2 p-2 bg-green-900/30 border border-green-600 rounded text-xs text-green-200">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span>Streaming active</span>
+              </div>
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  try {
+                    node.stopCapture();
+                    setUpdateTrigger(prev => prev + 1);
+                  } catch (error) {
+                    console.error('Failed to stop capture:', error);
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 rounded text-sm text-white transition-colors"
+              >
+                Stop Capture
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await node.startCapture();
+                  setUpdateTrigger(prev => prev + 1);
+                } catch (error) {
+                  console.error('Failed to start capture:', error);
+                  alert('Failed to start screen capture. Please allow screen sharing when prompted.');
+                }
+              }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-orange-600 hover:bg-orange-700 rounded text-sm text-white transition-colors"
+            >
+              Start Capture
+            </button>
+          )}
+
+          {/* Region cropping controls (disabled for now) */}
+          <div className="mt-3 pt-3 border-t border-gray-700">
+            <div className="text-xs text-gray-400 mb-2">Region Cropping (Coming Soon)</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-gray-400">X</label>
+                <input
+                  type="number"
+                  value={getDisplayValue('cropX', nodeDefinition.parameters.cropX)}
+                  onChange={(e) => handleParameterChange('cropX', parseFloat(e.target.value) || 0)}
+                  disabled
+                  className="w-full px-2 py-1 h-7 border border-gray-600 rounded text-sm bg-gray-800 text-gray-500 cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400">Y</label>
+                <input
+                  type="number"
+                  value={getDisplayValue('cropY', nodeDefinition.parameters.cropY)}
+                  onChange={(e) => handleParameterChange('cropY', parseFloat(e.target.value) || 0)}
+                  disabled
+                  className="w-full px-2 py-1 h-7 border border-gray-600 rounded text-sm bg-gray-800 text-gray-500 cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400">Width</label>
+                <input
+                  type="number"
+                  value={getDisplayValue('cropWidth', nodeDefinition.parameters.cropWidth)}
+                  onChange={(e) => handleParameterChange('cropWidth', parseFloat(e.target.value) || 1920)}
+                  disabled
+                  className="w-full px-2 py-1 h-7 border border-gray-600 rounded text-sm bg-gray-800 text-gray-500 cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400">Height</label>
+                <input
+                  type="number"
+                  value={getDisplayValue('cropHeight', nodeDefinition.parameters.cropHeight)}
+                  onChange={(e) => handleParameterChange('cropHeight', parseFloat(e.target.value) || 1080)}
+                  disabled
+                  className="w-full px-2 py-1 h-7 border border-gray-600 rounded text-sm bg-gray-800 text-gray-500 cursor-not-allowed"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {settingsOpen && nodeDefinition.type === 'warp' && (
         <div className="mt-2 mb-3 space-y-2">
           <button
@@ -441,8 +596,8 @@ export default function NodeComponent({ data }: NodeComponentProps) {
       )}
 
       {settingsOpen && (() => {
-        // For ImageNode, don't show parameters section at all (only file picker)
-        if (node instanceof ImageNode) {
+        // For ImageNode, VideoNode, and StreamInputNode, don't show parameters section at all (only custom UI)
+        if (node instanceof ImageNode || node instanceof VideoNode || node instanceof StreamInputNode) {
           return false;
         }
         // For other nodes, check if there are any parameters
@@ -450,8 +605,8 @@ export default function NodeComponent({ data }: NodeComponentProps) {
       })() && (
             <div className="space-y-3 mt-1">
               {Object.entries(nodeDefinition.parameters).map(([key, parameter]) => {
-                // Skip internal metadata parameters for ImageNode (shouldn't reach here for ImageNode, but keep for safety)
-                if (node instanceof ImageNode && key.startsWith('_')) {
+                // Skip internal metadata parameters for ImageNode, VideoNode, and StreamInputNode (shouldn't reach here, but keep for safety)
+                if ((node instanceof ImageNode || node instanceof VideoNode || node instanceof StreamInputNode) && key.startsWith('_')) {
                   return null;
                 }
                 

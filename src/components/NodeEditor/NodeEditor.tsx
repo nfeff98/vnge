@@ -41,6 +41,8 @@ import { TextureToCanvasNode } from '../../nodes/TextureToCanvasNode';
 import { DisplacementNode } from '../../nodes/DisplacementNode';
 import { TrailNode } from '../../nodes/TrailNode';
 import { ImageNode } from '../../nodes/ImageNode';
+import { VideoNode } from '../../nodes/VideoNode';
+import { StreamInputNode } from '../../nodes/StreamInputNode';
 import { WarpNode } from '../../nodes/WarpNode';
 import UIMenu from './UIMenu';
 import { useProjectManager } from '../../hooks/useProjectManager';
@@ -416,6 +418,12 @@ export default function NodeEditor() {
         break;
       case 'image':
         pipelineNode = new ImageNode(nodeId);
+        break;
+      case 'video':
+        pipelineNode = new VideoNode(nodeId);
+        break;
+      case 'streamInput':
+        pipelineNode = new StreamInputNode(nodeId);
         break;
       case 'mediapipe':
       case 'handTracking':  // Backward compatibility

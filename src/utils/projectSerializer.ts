@@ -25,6 +25,8 @@ import { TextureToCanvasNode } from '../nodes/TextureToCanvasNode';
 import { DisplacementNode } from '../nodes/DisplacementNode';
 import { TrailNode } from '../nodes/TrailNode';
 import { ImageNode } from '../nodes/ImageNode';
+import { VideoNode } from '../nodes/VideoNode';
+import { StreamInputNode } from '../nodes/StreamInputNode';
 import { WarpNode } from '../nodes/WarpNode';
 
 export interface SerializedNode {
@@ -279,6 +281,12 @@ function createNodeInstance(
       break;
     case 'image':
       node = new ImageNode(id);
+      break;
+    case 'video':
+      node = new VideoNode(id);
+      break;
+    case 'streaminput':
+      node = new StreamInputNode(id);
       break;
     case 'warp':
       node = new WarpNode(id);

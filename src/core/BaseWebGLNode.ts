@@ -1,4 +1,4 @@
-import { BaseNode, NodeParameterType } from './BaseNode';
+import { BaseNode, NodeParameterType, type NodeDefinition, NodeDataType } from './BaseNode';
 import { WebGLRenderer } from '../utils/WebGLRenderer';
 import { validateShaderProgram } from '../utils/shaderValidator';
 
@@ -51,6 +51,47 @@ export abstract class BaseWebGLNode extends BaseNode {
       }
     };
   }
+
+  /**
+   * Override getNodeDefinition to dynamically set output type based on outputMode.
+   * Child classes should implement getBaseNodeDefinition() instead of getNodeDefinition().
+   */
+  getNodeDefinition(): NodeDefinition {
+    const baseDef = this.getBaseNodeDefinition();
+    
+    // Get current output mode
+    // First try to get from parameter values (if already initialized)
+    // Otherwise, get from parameter definition default value
+    // Finally, default to 'texture'
+    let outputMode = this.getParameter('outputMode') as string;
+    if (!outputMode && baseDef.parameters.outputMode) {
+      outputMode = baseDef.parameters.outputMode.value as string;
+    }
+    outputMode = outputMode || 'texture';
+    
+    // Modify output type based on outputMode
+    const modifiedDef = {
+      ...baseDef,
+      outputs: baseDef.outputs.map(output => {
+        // Only modify TEXTURE outputs (other types like NUMBER, etc. should remain unchanged)
+        if (output.type === NodeDataType.TEXTURE) {
+          return {
+            ...output,
+            type: outputMode === 'canvas' ? NodeDataType.CANVAS : NodeDataType.TEXTURE
+          };
+        }
+        return output;
+      })
+    };
+    
+    return modifiedDef;
+  }
+
+  /**
+   * Child classes should implement this instead of getNodeDefinition().
+   * This allows BaseWebGLNode to dynamically adjust the output type.
+   */
+  protected abstract getBaseNodeDefinition(): NodeDefinition;
 
   /**
    * Child classes implement this to return vertex shader source.

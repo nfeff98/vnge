@@ -45,7 +45,7 @@ export class DisplacementNode extends BaseWebGLNode {
     });
   }
 
-  getNodeDefinition() {
+  protected getBaseNodeDefinition() {
     return {
       type: 'displacement',
       inputs: [

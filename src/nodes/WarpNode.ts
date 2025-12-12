@@ -55,7 +55,7 @@ export class WarpNode extends BaseWebGLNode {
     });
   }
 
-  getNodeDefinition() {
+  protected getBaseNodeDefinition() {
     return {
       type: 'warp',
       inputs: [

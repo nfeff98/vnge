@@ -59,7 +59,7 @@ export class GradientNode extends BaseWebGLNode {
     });
   }
 
-  getNodeDefinition() {
+  protected getBaseNodeDefinition() {
     return {
       type: 'gradient',
       inputs: [
