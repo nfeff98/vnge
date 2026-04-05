@@ -1,5 +1,6 @@
 import { BaseNode, NodeParameterType, type NodeDefinition, NodeDataType } from './BaseNode';
 import { WebGLRenderer } from '../utils/WebGLRenderer';
+import { WebGLContextManager } from '../utils/WebGLContextManager';
 import { validateShaderProgram } from '../utils/shaderValidator';
 
 interface NodeMetadata {
@@ -32,7 +33,7 @@ export abstract class BaseWebGLNode extends BaseNode {
   protected currentHeight: number = 0;
 
   // Track textures we created (vs received) for proper cleanup
-  private createdTextures: Set<WebGLTexture> = new Set();
+  protected createdTextures: Set<WebGLTexture> = new Set();
 
   constructor(id: string, metadata: NodeMetadata) {
     super(id, metadata);
@@ -282,7 +283,9 @@ export abstract class BaseWebGLNode extends BaseNode {
   protected initWebGL(width: number, height: number) {
     // Initial setup
     if (!this.renderer) {
-      this.canvas = this.createCanvas(width, height);
+      // Use shared canvas instead of creating new one
+      const sharedCanvas = WebGLContextManager.getSharedCanvas();
+      this.canvas = sharedCanvas;
       this.renderer = new WebGLRenderer(this.canvas);
       
       // Development-time validation (only in dev mode)
@@ -322,9 +325,8 @@ export abstract class BaseWebGLNode extends BaseNode {
     }
 
     // Resize if needed
+    // Note: We don't resize the shared canvas - we just track dimensions for viewport
     if (width !== this.currentWidth || height !== this.currentHeight) {
-      this.canvas!.width = width;
-      this.canvas!.height = height;
       this.currentWidth = width;
       this.currentHeight = height;
 

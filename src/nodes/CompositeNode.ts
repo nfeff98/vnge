@@ -1,21 +1,218 @@
-import { BaseNode, NodeDataType } from '../core/BaseNode';
+import { BaseWebGLNode } from '../core/BaseWebGLNode';
+import { NodeDataType, NodeParameterType } from '../core/BaseNode';
 import { Layers } from 'lucide-react';
-import { NodeParameterType } from '../core/BaseNode';
 import type { Color } from './ColorNode';
 
-export class CompositeNode extends BaseNode {
-  private outputCanvas: HTMLCanvasElement | null = null;
-  private cachedBaseCanvas: HTMLCanvasElement | null = null;
-  private cachedLayerCanvas: HTMLCanvasElement | null = null;
-  private cachedOutputCanvas: HTMLCanvasElement | null = null;
-  private lastBaseHash: string = '';
-  private lastLayerHash: string = '';
-  private lastBlendMode: string = '';
-  private lastTargetWidth: number = 0;
-  private lastTargetHeight: number = 0;
-  private lastBaseInput: any = null;
-  private lastLayerInput: any = null;
+// Fragment shader with blend mode support
+const FRAGMENT_SHADER = `
+precision mediump float;
 
+uniform sampler2D u_base;
+uniform sampler2D u_layer;
+uniform float u_blendMode;
+uniform vec2 u_resolution;
+
+varying vec2 v_uv;
+
+// Blend mode functions
+vec3 blendNormal(vec3 base, vec3 layer, float alpha) {
+  return mix(base, layer, alpha);
+}
+
+vec3 blendMultiply(vec3 base, vec3 layer, float alpha) {
+  return mix(base, base * layer, alpha);
+}
+
+vec3 blendScreen(vec3 base, vec3 layer, float alpha) {
+  return mix(base, 1.0 - (1.0 - base) * (1.0 - layer), alpha);
+}
+
+vec3 blendOverlay(vec3 base, vec3 layer, float alpha) {
+  vec3 result = mix(
+    vec3(2.0 * base * layer),
+    vec3(1.0 - 2.0 * (1.0 - base) * (1.0 - layer)),
+    step(0.5, base)
+  );
+  return mix(base, result, alpha);
+}
+
+vec3 blendDarken(vec3 base, vec3 layer, float alpha) {
+  return mix(base, min(base, layer), alpha);
+}
+
+vec3 blendLighten(vec3 base, vec3 layer, float alpha) {
+  return mix(base, max(base, layer), alpha);
+}
+
+vec3 blendColorDodge(vec3 base, vec3 layer, float alpha) {
+  vec3 result = base / (1.0 - layer + 0.0001);
+  result = min(result, vec3(1.0));
+  return mix(base, result, alpha);
+}
+
+vec3 blendColorBurn(vec3 base, vec3 layer, float alpha) {
+  vec3 result = 1.0 - (1.0 - base) / (layer + 0.0001);
+  result = max(result, vec3(0.0));
+  return mix(base, result, alpha);
+}
+
+vec3 blendHardLight(vec3 base, vec3 layer, float alpha) {
+  vec3 result = mix(
+    vec3(2.0 * base * layer),
+    vec3(1.0 - 2.0 * (1.0 - base) * (1.0 - layer)),
+    step(0.5, layer)
+  );
+  return mix(base, result, alpha);
+}
+
+vec3 blendSoftLight(vec3 base, vec3 layer, float alpha) {
+  vec3 result = mix(
+    base - (1.0 - 2.0 * layer) * base * (1.0 - base),
+    base + (2.0 * layer - 1.0) * (sqrt(base) - base),
+    step(0.5, layer)
+  );
+  return mix(base, result, alpha);
+}
+
+vec3 blendDifference(vec3 base, vec3 layer, float alpha) {
+  return mix(base, abs(base - layer), alpha);
+}
+
+vec3 blendExclusion(vec3 base, vec3 layer, float alpha) {
+  return mix(base, base + layer - 2.0 * base * layer, alpha);
+}
+
+// HSL color space helpers for hue, saturation, color, luminosity
+vec3 rgb2hsl(vec3 c) {
+  float maxVal = max(max(c.r, c.g), c.b);
+  float minVal = min(min(c.r, c.g), c.b);
+  float delta = maxVal - minVal;
+  float l = (maxVal + minVal) / 2.0;
+  float h = 0.0;
+  float s = 0.0;
+  
+  if (delta != 0.0) {
+    s = l < 0.5 ? delta / (maxVal + minVal) : delta / (2.0 - maxVal - minVal);
+    
+    if (maxVal == c.r) {
+      h = mod(((c.g - c.b) / delta + (c.g < c.b ? 6.0 : 0.0)) / 6.0, 1.0);
+    } else if (maxVal == c.g) {
+      h = ((c.b - c.r) / delta + 2.0) / 6.0;
+    } else {
+      h = ((c.r - c.g) / delta + 4.0) / 6.0;
+    }
+  }
+  
+  return vec3(h, s, l);
+}
+
+vec3 hsl2rgb(vec3 hsl) {
+  float h = hsl.x;
+  float s = hsl.y;
+  float l = hsl.z;
+  
+  float c = (1.0 - abs(2.0 * l - 1.0)) * s;
+  float x = c * (1.0 - abs(mod(h * 6.0, 2.0) - 1.0));
+  float m = l - c / 2.0;
+  
+  vec3 rgb;
+  if (h < 1.0/6.0) {
+    rgb = vec3(c, x, 0.0);
+  } else if (h < 2.0/6.0) {
+    rgb = vec3(x, c, 0.0);
+  } else if (h < 3.0/6.0) {
+    rgb = vec3(0.0, c, x);
+  } else if (h < 4.0/6.0) {
+    rgb = vec3(0.0, x, c);
+  } else if (h < 5.0/6.0) {
+    rgb = vec3(x, 0.0, c);
+  } else {
+    rgb = vec3(c, 0.0, x);
+  }
+  
+  return rgb + vec3(m);
+}
+
+vec3 blendHue(vec3 base, vec3 layer, float alpha) {
+  vec3 baseHSL = rgb2hsl(base);
+  vec3 layerHSL = rgb2hsl(layer);
+  vec3 result = hsl2rgb(vec3(layerHSL.x, baseHSL.y, baseHSL.z));
+  return mix(base, result, alpha);
+}
+
+vec3 blendSaturation(vec3 base, vec3 layer, float alpha) {
+  vec3 baseHSL = rgb2hsl(base);
+  vec3 layerHSL = rgb2hsl(layer);
+  vec3 result = hsl2rgb(vec3(baseHSL.x, layerHSL.y, baseHSL.z));
+  return mix(base, result, alpha);
+}
+
+vec3 blendColor(vec3 base, vec3 layer, float alpha) {
+  vec3 baseHSL = rgb2hsl(base);
+  vec3 layerHSL = rgb2hsl(layer);
+  vec3 result = hsl2rgb(vec3(layerHSL.x, layerHSL.y, baseHSL.z));
+  return mix(base, result, alpha);
+}
+
+vec3 blendLuminosity(vec3 base, vec3 layer, float alpha) {
+  vec3 baseHSL = rgb2hsl(base);
+  vec3 layerHSL = rgb2hsl(layer);
+  vec3 result = hsl2rgb(vec3(baseHSL.x, baseHSL.y, layerHSL.z));
+  return mix(base, result, alpha);
+}
+
+void main() {
+  vec4 baseColor = texture2D(u_base, v_uv);
+  vec4 layerColor = texture2D(u_layer, v_uv);
+  
+  vec3 result;
+  float alpha = layerColor.a;
+  
+  // Blend mode selection (cast float to int for comparison)
+  int blendMode = int(u_blendMode);
+  if (blendMode == 0) {
+    result = blendNormal(baseColor.rgb, layerColor.rgb, alpha);
+  } else if (blendMode == 1) {
+    result = blendMultiply(baseColor.rgb, layerColor.rgb, alpha);
+  } else if (blendMode == 2) {
+    result = blendScreen(baseColor.rgb, layerColor.rgb, alpha);
+  } else if (blendMode == 3) {
+    result = blendOverlay(baseColor.rgb, layerColor.rgb, alpha);
+  } else if (blendMode == 4) {
+    result = blendDarken(baseColor.rgb, layerColor.rgb, alpha);
+  } else if (blendMode == 5) {
+    result = blendLighten(baseColor.rgb, layerColor.rgb, alpha);
+  } else if (blendMode == 6) {
+    result = blendColorDodge(baseColor.rgb, layerColor.rgb, alpha);
+  } else if (blendMode == 7) {
+    result = blendColorBurn(baseColor.rgb, layerColor.rgb, alpha);
+  } else if (blendMode == 8) {
+    result = blendHardLight(baseColor.rgb, layerColor.rgb, alpha);
+  } else if (blendMode == 9) {
+    result = blendSoftLight(baseColor.rgb, layerColor.rgb, alpha);
+  } else if (blendMode == 10) {
+    result = blendDifference(baseColor.rgb, layerColor.rgb, alpha);
+  } else if (blendMode == 11) {
+    result = blendExclusion(baseColor.rgb, layerColor.rgb, alpha);
+  } else if (blendMode == 12) {
+    result = blendHue(baseColor.rgb, layerColor.rgb, alpha);
+  } else if (blendMode == 13) {
+    result = blendSaturation(baseColor.rgb, layerColor.rgb, alpha);
+  } else if (blendMode == 14) {
+    result = blendColor(baseColor.rgb, layerColor.rgb, alpha);
+  } else if (blendMode == 15) {
+    result = blendLuminosity(baseColor.rgb, layerColor.rgb, alpha);
+  } else {
+    result = blendNormal(baseColor.rgb, layerColor.rgb, alpha);
+  }
+  
+  // Composite alpha
+  float finalAlpha = baseColor.a + layerColor.a * (1.0 - baseColor.a);
+  gl_FragColor = vec4(result, finalAlpha);
+}
+`;
+
+export class CompositeNode extends BaseWebGLNode {
   constructor(id: string) {
     super(id, {
       name: 'Composite',
@@ -27,15 +224,24 @@ export class CompositeNode extends BaseNode {
     });
   }
 
-  getNodeDefinition() {
+  protected getBaseNodeDefinition() {
     return {
       type: 'composite',
       inputs: [
-        { id: 'base', type: NodeDataType.CANVAS, accepts: [NodeDataType.CANVAS, NodeDataType.VIDEO, NodeDataType.COLOR] },
-        { id: 'layer', type: NodeDataType.CANVAS, accepts: [NodeDataType.CANVAS, NodeDataType.VIDEO, NodeDataType.COLOR] }
+        { 
+          id: 'base', 
+          type: NodeDataType.TEXTURE, 
+          accepts: [NodeDataType.CANVAS, NodeDataType.VIDEO, NodeDataType.TEXTURE, NodeDataType.COLOR] 
+        },
+        { 
+          id: 'layer', 
+          type: NodeDataType.TEXTURE, 
+          accepts: [NodeDataType.CANVAS, NodeDataType.VIDEO, NodeDataType.TEXTURE, NodeDataType.COLOR] 
+        }
       ],
-      outputs: [{ id: 'composite', type: NodeDataType.CANVAS }],
+      outputs: [{ id: 'composite', type: NodeDataType.TEXTURE }],
       parameters: {
+        ...this.getBaseWebGLParameters(),
         blendMode: {
           type: NodeParameterType.ENUM,
           value: 'normal',
@@ -57,10 +263,6 @@ export class CompositeNode extends BaseNode {
             'color',
             'luminosity'
           ]
-        },
-        static: {
-          type: NodeParameterType.BOOLEAN,
-          value: false
         }
       },
       maxInputs: 2,
@@ -68,334 +270,169 @@ export class CompositeNode extends BaseNode {
     };
   }
 
+  protected getFragmentShader(): string {
+    return FRAGMENT_SHADER;
+  }
+
+  protected getShaderUniforms(): Record<string, any> {
+    const baseTexture = this.getInputAsTexture('base');
+    const layerTexture = this.getInputAsTexture('layer');
+    
+    if (!baseTexture || !layerTexture) {
+      return {
+        u_base: { texture: null, unit: 0 },
+        u_layer: { texture: null, unit: 1 },
+        u_blendMode: 0,
+        u_resolution: [this.currentWidth, this.currentHeight]
+      };
+    }
+
+    const blendModeMap: Record<string, number> = {
+      'normal': 0,
+      'multiply': 1,
+      'screen': 2,
+      'overlay': 3,
+      'darken': 4,
+      'lighten': 5,
+      'color-dodge': 6,
+      'color-burn': 7,
+      'hard-light': 8,
+      'soft-light': 9,
+      'difference': 10,
+      'exclusion': 11,
+      'hue': 12,
+      'saturation': 13,
+      'color': 14,
+      'luminosity': 15
+    };
+
+    const blendMode = this.getParameter('blendMode') as string;
+    const blendModeIndex = blendModeMap[blendMode] || 0;
+
+    return {
+      u_base: { texture: baseTexture, unit: 0 },
+      u_layer: { texture: layerTexture, unit: 1 },
+      u_blendMode: blendModeIndex,
+      u_resolution: [this.currentWidth, this.currentHeight]
+    };
+  }
+
+  protected getOutputDimensions(): { width: number; height: number } {
+    // Get dimensions from base input, fallback to layer, then default
+    const base = this.getInput('base');
+    const layer = this.getInput('layer');
+    
+    // Try base first
+    if (base) {
+      const dims = this.getInputDimensions(base);
+      if (dims) return dims;
+    }
+    
+    // Try layer
+    if (layer) {
+      const dims = this.getInputDimensions(layer);
+      if (dims) return dims;
+    }
+    
+    // Fallback
+    return { width: 1920, height: 1080 };
+  }
+
   /**
-   * Compute a hash for an input to detect changes
-   * For static mode, we track input reference and dimensions
+   * Override to handle Color inputs by converting to texture
    */
-  private computeInputHash(input: any): string {
-    if (!input) return '';
+  protected getInputAsTexture(inputId: string): WebGLTexture | null {
+    const input = this.getInput(inputId);
     
-    // Video is always dynamic - use currentTime
-    if (input instanceof HTMLVideoElement) {
-      return `video:${input.currentTime}:${input.videoWidth}x${input.videoHeight}`;
-    }
-    
-    // WebGLTexture - always dynamic (recreated each frame)
-    if ((input as any).__width && (input as any).__height) {
-      return `texture:${(input as any).__width}x${(input as any).__height}`;
-    }
-    
-    // Canvas - use reference and dimensions
-    if (input instanceof HTMLCanvasElement) {
-      return `canvas:${input.width}x${input.height}:${input}`;
-    }
-    
-    // Color - use RGB values
-    if ((input as any).r !== undefined) {
+    // Handle Color objects - create a 1x1 texture
+    if ((input as any).r !== undefined && (input as any).g !== undefined && (input as any).b !== undefined) {
       const color = input as any;
-      return `color:${color.r},${color.g},${color.b},${color.a ?? 1}`;
+      const gl = this.renderer!.getContext();
+      const texture = gl.createTexture();
+      if (!texture) throw new Error('Failed to create texture');
+      
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texImage2D(
+        gl.TEXTURE_2D, 
+        0, 
+        gl.RGBA, 
+        1, 
+        1, 
+        0, 
+        gl.RGBA, 
+        gl.UNSIGNED_BYTE,
+        new Uint8Array([color.r, color.g, color.b, Math.round((color.a ?? 1) * 255)])
+      );
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      
+      // Track for cleanup
+      this.createdTextures.add(texture);
+      return texture;
     }
     
-    return JSON.stringify(input);
+    // Use base class implementation for other types
+    return super.getInputAsTexture(inputId);
   }
 
   async executeInternal(): Promise<void> {
     const base = this.getInput('base');
     const layer = this.getInput('layer');
-    const isStatic = this.getParameter('static') as boolean;
 
-    if (!base || !layer) {
       // If only base is connected, pass it through
+    if (!layer) {
       if (base) {
+        // If base is already a texture, pass it through directly
+        if ((base as any).__width && (base as any).__height) {
         this.setOutput('composite', base);
-      }
-      // Clear caches when inputs disconnected
-      this.cachedBaseCanvas = null;
-      this.cachedLayerCanvas = null;
-      this.cachedOutputCanvas = null;
-      this.lastBaseHash = '';
-      this.lastLayerHash = '';
       return;
     }
-
-    if (typeof(base) !== 'object' || typeof(layer) !== 'object') {
-      return;
-    }
-
-    // Compute input hashes for change detection
-    const baseHash = this.computeInputHash(base);
-    const layerHash = this.computeInputHash(layer);
-    const blendMode = this.getParameter('blendMode') as string;
-
-    // Check if inputs changed (for static mode caching)
-    const baseChanged = base !== this.lastBaseInput;
-    const layerChanged = layer !== this.lastLayerInput;
-    const inputsChanged = baseChanged || layerChanged;
-
-    // Determine dimensions - prioritize canvas/video/texture dimensions, fallback to default
-    let targetWidth = 640;
-    let targetHeight = 480;
-    
-    // Check base for dimensions
-    if (base) {
-      // Check if it's a WebGLTexture
-      if ((base as any).__width && (base as any).__height) {
-        targetWidth = (base as any).__width;
-        targetHeight = (base as any).__height;
-      } else if (!(base as any).r) {
-        // It's a canvas or video element
-        const baseEl = base as HTMLCanvasElement | HTMLVideoElement;
-        if (baseEl instanceof HTMLVideoElement) {
-          targetWidth = baseEl.videoWidth || 640;
-          targetHeight = baseEl.videoHeight || 480;
-        } else if (baseEl instanceof HTMLCanvasElement) {
-          targetWidth = baseEl.width || 640;
-          targetHeight = baseEl.height || 480;
+        // For canvas/video/color, we need to render it to a texture
+        // Use a simple passthrough shader by calling base class with single input
+        // But we need both inputs for the shader, so create a transparent layer
+        // Actually, simpler: just convert to texture and output
+        const dims = this.getInputDimensions(base);
+        if (dims) {
+          this.initWebGL(dims.width, dims.height);
+          const baseTexture = this.getInputAsTexture('base');
+          if (baseTexture) {
+            // Create output texture with metadata
+            const outputTexture = baseTexture as any;
+            outputTexture.__width = dims.width;
+            outputTexture.__height = dims.height;
+            outputTexture.__gl = this.renderer!.getContext();
+            this.setOutput('composite', outputTexture);
+          }
         }
       }
+      return;
     }
-    
-    // Check layer for dimensions (use larger resolution if both have dimensions)
-    if (layer) {
-      let layerWidth = 640;
-      let layerHeight = 480;
-      
-      // Check if it's a WebGLTexture
+
+    if (!base) {
+      // If only layer, pass it through
       if ((layer as any).__width && (layer as any).__height) {
-        layerWidth = (layer as any).__width;
-        layerHeight = (layer as any).__height;
-      } else if (!(layer as any).r) {
-        // It's a canvas or video element
-        const layerEl = layer as HTMLCanvasElement | HTMLVideoElement;
-        if (layerEl instanceof HTMLVideoElement) {
-          layerWidth = layerEl.videoWidth || 640;
-          layerHeight = layerEl.videoHeight || 480;
-        } else if (layerEl instanceof HTMLCanvasElement) {
-          layerWidth = layerEl.width || 640;
-          layerHeight = layerEl.height || 480;
+        this.setOutput('composite', layer);
+        return;
+      }
+      // Convert to texture
+      const dims = this.getInputDimensions(layer);
+      if (dims) {
+        this.initWebGL(dims.width, dims.height);
+        const layerTexture = this.getInputAsTexture('layer');
+        if (layerTexture) {
+          const outputTexture = layerTexture as any;
+          outputTexture.__width = dims.width;
+          outputTexture.__height = dims.height;
+          outputTexture.__gl = this.renderer!.getContext();
+          this.setOutput('composite', outputTexture);
         }
       }
-      
-      // Use the maximum resolution to preserve quality
-      if (layerWidth * layerHeight > targetWidth * targetHeight) {
-        targetWidth = layerWidth;
-        targetHeight = layerHeight;
-      }
+      return;
     }
 
-    // Check dimensions changed
-    const dimensionsChanged = targetWidth !== this.lastTargetWidth || targetHeight !== this.lastTargetHeight;
-
-    // In static mode, check if we can reuse cached output
-    if (isStatic && !inputsChanged && !dimensionsChanged && 
-        baseHash === this.lastBaseHash && layerHash === this.lastLayerHash && 
-        blendMode === this.lastBlendMode && this.cachedOutputCanvas) {
-      // All inputs are static and haven't changed, reuse cached output (no redo)
-      // Decrement the redo count that was added by BaseNode.execute()
-      this.redoCount = Math.max(0, this.redoCount - 1);
-      this.setOutput('composite', this.cachedOutputCanvas);
-      return; // Skip - no redo
-    }
-
-    // Actually recomputing (redo already marked by BaseNode)
-
-    // Convert inputs to canvas - cache if static mode
-    let baseCanvas: HTMLCanvasElement | null;
-    if (isStatic && !baseChanged && !dimensionsChanged && this.cachedBaseCanvas) {
-      // Base is static and hasn't changed, reuse cached canvas
-      baseCanvas = this.cachedBaseCanvas;
-    } else {
-      baseCanvas = await this.ensureCanvas(base, targetWidth, targetHeight);
-      // Cache if static mode
-      if (baseCanvas && isStatic) {
-        this.cachedBaseCanvas = baseCanvas;
-      } else {
-        this.cachedBaseCanvas = null;
-      }
-    }
-
-    let layerCanvas: HTMLCanvasElement | null;
-    if (isStatic && !layerChanged && !dimensionsChanged && this.cachedLayerCanvas) {
-      // Layer is static and hasn't changed, reuse cached canvas
-      layerCanvas = this.cachedLayerCanvas;
-    } else {
-      layerCanvas = await this.ensureCanvas(layer, targetWidth, targetHeight);
-      // Cache if static mode
-      if (layerCanvas && isStatic) {
-        this.cachedLayerCanvas = layerCanvas;
-      } else {
-        this.cachedLayerCanvas = null;
-      }
-    }
-
-    if (!baseCanvas || !layerCanvas) return;
-
-    // Create output canvas
-    this.outputCanvas ||= this.createCanvas(baseCanvas.width, baseCanvas.height);
-    if (this.outputCanvas.width !== baseCanvas.width || this.outputCanvas.height !== baseCanvas.height) {
-      this.outputCanvas.width = baseCanvas.width;
-      this.outputCanvas.height = baseCanvas.height;
-    }
-
-    const ctx = this.outputCanvas.getContext('2d')!;
-
-    // Draw base layer
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(baseCanvas, 0, 0);
-
-    // Draw layer with blend mode (both canvases should already be at the same resolution)
-    ctx.globalCompositeOperation = blendMode as GlobalCompositeOperation;
-    ctx.drawImage(layerCanvas, 0, 0);
-
-    // Reset
-    ctx.globalCompositeOperation = 'source-over';
-
-    // Cache output if static mode
-    if (isStatic) {
-      // Create a copy of the output canvas for caching
-      const cachedOutput = this.createCanvas(this.outputCanvas.width, this.outputCanvas.height);
-      const cachedCtx = cachedOutput.getContext('2d')!;
-      cachedCtx.drawImage(this.outputCanvas, 0, 0);
-      this.cachedOutputCanvas = cachedOutput;
-    } else {
-      this.cachedOutputCanvas = null;
-    }
-
-    // Update cache tracking
-    this.lastBaseHash = baseHash;
-    this.lastLayerHash = layerHash;
-    this.lastBlendMode = blendMode;
-    this.lastTargetWidth = targetWidth;
-    this.lastTargetHeight = targetHeight;
-    this.lastBaseInput = base;
-    this.lastLayerInput = layer;
-
-    this.setOutput('composite', this.outputCanvas);
-  }
-
-  private async ensureCanvas(
-    input: HTMLCanvasElement | HTMLVideoElement | WebGLTexture | Color | null,
-    width: number = 640,
-    height: number = 480
-  ): Promise<HTMLCanvasElement | null> {
-    if (!input) return null;
-
-    // Check if input is a Color object
-    if ((input as any).r !== undefined && (input as any).g !== undefined && (input as any).b !== undefined) {
-      const color = input as Color;
-      const canvas = this.createCanvas(width, height);
-      const ctx = canvas.getContext('2d')!;
-      
-      // Fill canvas with solid color
-      ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a ?? 1})`;
-      ctx.fillRect(0, 0, width, height);
-      
-      return canvas;
-    }
-
-    // Check if input is a WebGLTexture (has __width, __height metadata)
-    if ((input as any).__width && (input as any).__height && (input as any).__gl) {
-      const texture = input as any;
-      const gl = texture.__gl as WebGLRenderingContext;
-      const texWidth = texture.__width;
-      const texHeight = texture.__height;
-
-      // Convert texture to canvas at target resolution
-      const canvas = this.createCanvas(width, height);
-      const framebuffer = gl.createFramebuffer();
-      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, input, 0);
-
-      // Read pixels at original texture resolution
-      const pixels = new Uint8Array(texWidth * texHeight * 4);
-      gl.readPixels(0, 0, texWidth, texHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-
-      // Create temporary canvas at texture resolution
-      const tempCanvas = this.createCanvas(texWidth, texHeight);
-      const tempCtx = tempCanvas.getContext('2d')!;
-      const imageData = tempCtx.createImageData(texWidth, texHeight);
-      imageData.data.set(pixels);
-      tempCtx.putImageData(imageData, 0, 0);
-
-      // Scale to target resolution using high-quality scaling
-      const ctx = canvas.getContext('2d')!;
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(tempCanvas, 0, 0, width, height);
-
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      gl.deleteFramebuffer(framebuffer);
-
-      return canvas;
-    }
-
-    if (input instanceof HTMLVideoElement) {
-      const video = input as HTMLVideoElement;
-      if (video.videoWidth === 0 || video.videoHeight === 0) {
-        return null;
-      }
-
-      // Create canvas at target resolution and scale video to it
-      const canvas = this.createCanvas(width, height);
-      const ctx = canvas.getContext('2d')!;
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(video, 0, 0, width, height);
-      return canvas;
-    }
-
-    // Handle HTMLCanvasElement - scale to target resolution if dimensions differ
-    if (input instanceof HTMLCanvasElement) {
-      const sourceCanvas = input as HTMLCanvasElement;
-      if (sourceCanvas.width === width && sourceCanvas.height === height) {
-        // Already at target resolution, return as-is
-        return sourceCanvas;
-      }
-      
-      // Scale to target resolution
-      const canvas = this.createCanvas(width, height);
-      const ctx = canvas.getContext('2d')!;
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(sourceCanvas, 0, 0, width, height);
-      return canvas;
-    }
-
-    return null;
-  }
-
-  cleanup() {
-    // Clear caches
-    this.cachedBaseCanvas = null;
-    this.cachedLayerCanvas = null;
-    this.cachedOutputCanvas = null;
-    this.outputCanvas = null;
-    this.lastBaseHash = '';
-    this.lastLayerHash = '';
-    this.lastBlendMode = '';
-    this.lastBaseInput = null;
-    this.lastLayerInput = null;
-  }
-
-  // Override setInput to clear cache when connections change
-  setInput(inputId: string, data: HTMLCanvasElement | HTMLVideoElement | WebGLTexture | number | string | boolean | Color | null) {
-    // If input is being disconnected (set to null), clear cache
-    if (data === null) {
-      if (inputId === 'base') {
-        this.cachedBaseCanvas = null;
-        this.lastBaseHash = '';
-        this.lastBaseInput = null;
-      } else if (inputId === 'layer') {
-        this.cachedLayerCanvas = null;
-        this.lastLayerHash = '';
-        this.lastLayerInput = null;
-      }
-      // Clear output cache when any input is disconnected
-      this.cachedOutputCanvas = null;
-    }
-    super.setInput(inputId, data);
+    // Both inputs present - do the composite
+    await super.executeInternal();
   }
 }
-
